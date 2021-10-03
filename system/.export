@@ -3,5 +3,5 @@ export SSH="$HOME/.ssh"
 
 # Golang
 export GO111MODULE=on
-export GOPATH="/usr/bin/go"
+export GOPATH="/opt/go"
 export PATH=$PATH:$(go env GOPATH)/bin

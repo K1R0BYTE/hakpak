@@ -25,6 +25,8 @@ sudo apt update && sudo apt -y upgrade  && sudo apt -y install git
 git clone https://github.com/K1R0BYTE/hakpak.git ${HOME}/.hakpak && cd ${HOME}/.hakpak/install
 
 bash setup.sh
+
+type exit after installing zsh
 ```
 
 # Toolset:

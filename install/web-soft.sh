@@ -11,7 +11,7 @@ colorecho 'Starting Installing Web Soft'
 
 # Go Variables
 export GO111MODULE=on
-export GOPATH="/usr/bin/go"
+export GOPATH="/opt/go"
 export PATH=$PATH:$(go env GOPATH)/bin
 
 # Web
@@ -38,9 +38,9 @@ go get -u github.com/jaeles-project/gospider
 ## Burpsuite Community
 sudo apt -y install burpsuite
 ## Burpsuite Pro
-curl https://portswigger.net/burp/releases/download?product=pro&version=2021.8.3&type=Linux -o /tmp/burppro.sh
-sudo bash /tmp/burppro.sh
-rm -f /tmp/burppro.sh
+# wget -c https://portswigger.net/burp/releases/download?product=pro&version=2021.8.4&type=Linux -O /tmp/burppro.sh
+# sudo bash /tmp/burppro.sh
+# rm -f /tmp/burppro.sh
 
 # Directory fuzzing
 ## Gobuster
