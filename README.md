@@ -1,4 +1,4 @@
-# What is it ?
+# What is it?
 
 Predefined hacking toolset with configs(zsh, tmux, burp, os)
 
@@ -14,7 +14,6 @@ To make comfortable hacking enviroment fast and efficient
 Kali linux: no prerequisites
 
 Other linux distro: add Kali repositories (setup/addrep.sh)
-
 ```
 
 # How to Install?
@@ -27,7 +26,6 @@ git clone https://github.com/K1R0BYTE/hakpak.git ${HOME}/.hakpak && cd ${HOME}/.
 bash setup.sh
 
 Type "exit" during installation of zsh in "install git:(main)" prompt
-
 ```
 
 # Toolset:
