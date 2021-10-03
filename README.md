@@ -20,13 +20,14 @@ Other linux distro: add Kali repositories (setup/addrep.sh)
 # How to Install?
 
 ```
-sudo apt update && sudo apt -y upgrade  && sudo apt -y install git 
+sudo apt update && sudo apt -y upgrade && sudo apt -y install git 
 
 git clone https://github.com/K1R0BYTE/hakpak.git ${HOME}/.hakpak && cd ${HOME}/.hakpak/install
 
 bash setup.sh
 
-type exit after installing zsh
+Type "exit" during installation of zsh in "install git:(main)" prompt
+
 ```
 
 # Toolset:
@@ -84,7 +85,7 @@ type exit after installing zsh
 * ffuf
 * eyewitness
 * burpsuite-community
-* burpsuite-pro-2021.8.3 (direct)
+* burpsuite-pro-2021.8.4 (direct)
 
 ## Pentest Tools (apt+git)
 
@@ -119,3 +120,4 @@ type exit after installing zsh
 
 * xfce4
 * xrdp
+* dbus-x11

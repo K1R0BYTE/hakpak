@@ -11,7 +11,7 @@ colorecho 'Starting Installing Wordlists'
 
 # SecLists
 wget -c https://github.com/danielmiessler/SecLists/archive/master.zip -O /tmp/SecLists.zip
-unzip SecLists.zip -d /opt/wordlists/seclists
+unzip /tmp/SecLists.zip -d /opt/wordlists/seclists
 rm -f /tmp/SecLists.zip
 
 # Fuzz

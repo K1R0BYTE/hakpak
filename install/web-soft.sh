@@ -35,12 +35,12 @@ go get -u github.com/tomnomnom/httprobe
 go get -u github.com/hakluke/hakrawler
 ## Gospider
 go get -u github.com/jaeles-project/gospider
-## Burpsuite Community
+## BurSsuite Community
 sudo apt -y install burpsuite
-## Burpsuite Pro
-# wget -c https://portswigger.net/burp/releases/download?product=pro&version=2021.8.4&type=Linux -O /tmp/burppro.sh
-# sudo bash /tmp/burppro.sh
-# rm -f /tmp/burppro.sh
+## BurpSuite Pro
+wget -c https://portswigger.net/burp/releases/download?product=pro&version=2021.8.4&type=Linux -O /tmp/burppro.sh
+bash /tmp/burppro.sh -q -dir /opt/burpsuitepro
+rm -f /tmp/burppro.sh
 
 # Directory fuzzing
 ## Gobuster
