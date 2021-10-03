@@ -26,6 +26,6 @@ colorecho 'Finished Installing Jython Soft'
 
 colorecho 'Starting Installing GoLang Soft'
 
-sudo apt install golang -y
+sudo apt -y install golang
 
 colorecho 'Finished Installing GoLang Soft'

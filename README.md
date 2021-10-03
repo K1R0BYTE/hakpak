@@ -66,6 +66,14 @@ Type "exit" during installation of zsh in "install git:(main)" prompt
 * requests 
 * setuptools
 
+### Jython
+
+* jython
+
+### Golang
+
+* golang
+
 ## Web Tools (apt+git+direct)
 
 * sqlmap
