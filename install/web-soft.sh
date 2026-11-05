@@ -1,57 +1,41 @@
 #!/usr/bin/env bash
+# Web Tools section.
+# shellcheck source=install/lib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-RED="\033[1;31m"
-NOCOLOR="\033[0m"
+# Scanners
+install_tool pipx sqlmap
+install_tool pipx wafw00f
+install_tool pipx arjun
+install_tool apt whatweb
 
-colorecho() {
-	echo -e "[*] ${RED}${1}${NOCOLOR}"
+_install_nikto() {
+  apt_install libnet-ssleay-perl libjson-perl &&
+    _install_git nikto https://github.com/sullo/nikto &&
+    run_step sudo ln -sf "$HAKPAK_OPT/nikto/program/nikto.pl" /usr/local/bin/nikto
 }
+install_tool custom nikto _install_nikto
 
-colorecho 'Starting Installing Web Soft'
+_install_wpscan() {
+  if has_command wpscan; then
+    log_ok "wpscan already installed"
+    return 0
+  fi
+  apt_install ruby-full ruby-dev build-essential libcurl4-openssl-dev zlib1g-dev &&
+    run_step sudo gem install wpscan
+}
+install_tool custom wpscan _install_wpscan
 
-# Go Variables
-export GO111MODULE=on
-export GOPATH="/opt/go"
-export PATH=$PATH:$(go env GOPATH)/bin
-
-# Web
-## Sqlmap
-sudo apt -y install sqlmap
-## CMSeeK
-sudo apt -y install cmseek
-## Nikto
-sudo apt -y install nikto
-## Wpscan
-sudo apt -y install wpscan
-## wafw00f
-sudo apt -y install wafw00f
-## Whatweb
-sudo apt -y install whatweb
-## Arjun
-sudo apt -y install arjun
-## Httprobe
-go get -u github.com/tomnomnom/httprobe
-## Hakrawler
-go get -u github.com/hakluke/hakrawler
-## Gospider
-go get -u github.com/jaeles-project/gospider
-## BurSsuite Community
-sudo apt -y install burpsuite
-## BurpSuite Pro
-wget -c https://portswigger.net/burp/releases/download?product=pro&version=2021.8.4&type=Linux -O /tmp/burppro.sh
-bash /tmp/burppro.sh -q -dir /opt/burpsuitepro
-rm -f /tmp/burppro.sh
+# Probing and crawling
+install_tool go httpx github.com/projectdiscovery/httpx/cmd/httpx@latest
+install_tool go katana github.com/projectdiscovery/katana/cmd/katana@latest
 
 # Directory fuzzing
-## Gobuster
-sudo apt -y install gobuster
-## Wfuzz
-sudo apt -y install wfuzz
-## Ffuf
-sudo apt -y install ffuf
+install_tool go gobuster github.com/OJ/gobuster/v3@latest
+install_tool go ffuf github.com/ffuf/ffuf/v2@latest
+install_tool apt wfuzz
 
-# Screenshooting
-## EyeWitness
-sudo apt -y install eyewitness
+# Screenshots
+install_tool go gowitness github.com/sensepost/gowitness@latest
 
-colorecho 'Finished Installing Web Soft'
+install_summary

@@ -1,4 +1,4 @@
-alias -g cdi='cd `ls | peco`'
+alias -g cdi='cd `ls | fzf`'
 alias -g xcopy='xclip -selection clipboard'
 alias -g xpaste='xclip -selection clipboard -o'
 alias -g lsa='ls -lsah'
