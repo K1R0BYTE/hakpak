@@ -84,16 +84,15 @@ run_step() {
 
 # Run a step that isn't a tool install (config, service) and count a
 # failure in the summary: step <label> <command...>
-# A hakpak function (like link_config) is called directly: it sends its own
-# commands through run_step, so a dry run records what it would do.
+# link_config and merge_history are called directly: they send their own
+# commands through run_step, so a dry run records what they would do.
 step() {
   local label="$1" rc
   shift
-  if declare -F "$1" >/dev/null; then
-    "$@"
-  else
-    run_step "$@"
-  fi
+  case "$1" in
+    link_config|merge_history) "$@" ;;
+    *) run_step "$@" ;;
+  esac
   rc=$?
   if [ "$rc" -eq 0 ]; then
     return 0
@@ -133,11 +132,8 @@ require_normal_user() {
 # Make a directory for a tool. Where you can't write (a fresh /opt), it's
 # made with sudo and handed to your user, so the tool itself runs without sudo.
 ensure_dir() {
-  local dir="$1" parent="$1"
-  while [ ! -e "$parent" ]; do
-    parent="$(dirname "$parent")"
-  done
-  if [ -w "$parent" ]; then
+  local dir="$1"
+  if ! _needs_sudo "$dir/."; then
     run_step mkdir -p "$dir"
   else
     run_step sudo mkdir -p "$dir" &&
@@ -145,19 +141,26 @@ ensure_dir() {
   fi
 }
 
-# Run a step that changes <target>, with sudo only when you can't write to
-# the directory that holds it: _run_at <target> <command...>
-_run_at() {
+# True when you can't write to the directory that would hold <path> (its
+# nearest existing parent).
+_needs_sudo() {
   local parent
   parent="$(dirname "$1")"
-  shift
   while [ ! -e "$parent" ]; do
     parent="$(dirname "$parent")"
   done
-  if [ -w "$parent" ]; then
-    run_step "$@"
-  else
+  [ ! -w "$parent" ]
+}
+
+# Run a step that changes <target>, with sudo only when needed:
+# _run_at <target> <command...>
+_run_at() {
+  local target="$1"
+  shift
+  if _needs_sudo "$target"; then
     run_step sudo "$@"
+  else
+    run_step "$@"
   fi
 }
 
@@ -215,8 +218,9 @@ _copy_config() {
   if [ -L "$target" ]; then
     # An older hakpak linked it; a link holds nothing to back up.
     _run_at "$target" rm -f "$target" || return 1
-  elif [ -e "$target" ] && [ ! -e "$target.bak" ] && [ ! -L "$target.bak" ]; then
-    _run_at "$target" cp -p "$target" "$target.bak" || return 1
+  elif [ -e "$target" ]; then
+    # Keep whatever is there (the stock file, or your edits to a copy).
+    _run_at "$target" cp -p "$target" "$(_backup_path "$target")" || return 1
   fi
   _run_at "$target" install -m 644 "$src" "$target"
 }
@@ -225,10 +229,18 @@ _copy_config() {
 # Your history is kept and stays last (so Ctrl+R finds your own commands
 # first), curated entries you don't already have go before it, and nothing
 # is duplicated. The result is your own file (mode 600), never a link into
-# the repo, so new commands stay local.
+# the repo, so new commands stay local. If the target is your own link to
+# somewhere else (a synced folder), the file it points to is updated.
 merge_history() {
-  local src target="$2"
+  local src target="$2" real
   src="$(_config_source "$1")" || { echo "$src"; return 1; }
+  if [ -L "$target" ]; then
+    real="$(readlink -f "$target")"
+    case "$real" in
+      "$HAKPAK_ROOT"/*) ;;  # an older hakpak link into the repo: replace it
+      *) target="$real" ;;
+    esac
+  fi
   run_step _merge_history_into "$src" "$target"
 }
 
