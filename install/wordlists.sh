@@ -1,20 +1,9 @@
 #!/usr/bin/env bash
+# Wordlists section.
+# shellcheck source=install/lib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+require_normal_user
 
-RED="\033[1;31m"
-NOCOLOR="\033[0m"
+install_tool git seclists https://github.com/danielmiessler/SecLists "$HAKPAK_OPT/wordlists/seclists"
 
-colorecho() {
-	echo -e "[*] ${RED}${1}${NOCOLOR}"
-}
-
-colorecho 'Starting Installing Wordlists'
-
-# SecLists
-wget -c https://github.com/danielmiessler/SecLists/archive/master.zip -O /tmp/SecLists.zip
-unzip /tmp/SecLists.zip -d /opt/wordlists/seclists
-rm -f /tmp/SecLists.zip
-
-# Fuzz
-wget -c https://raw.githubusercontent.com/Bo0oM/fuzz.txt/master/fuzz.txt -O /opt/wordlists/fuzz.txt
-
-colorecho 'Finished Installing Wordlists'
+install_summary

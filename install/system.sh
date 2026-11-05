@@ -1,32 +1,12 @@
 #!/usr/bin/env bash
+# System section: base packages every other section relies on.
+# shellcheck source=install/lib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+require_normal_user
 
-RED="\033[1;31m"
-NOCOLOR="\033[0m"
+log 'Updating package lists'
+step 'package lists' sudo apt-get update
 
-colorecho() {
-	echo -e "[*] ${RED}${1}${NOCOLOR}"
-}
+install_tool apt system-packages "build-essential net-tools bind9-dnsutils nfs-common cifs-utils"
 
-colorecho 'Starting Updating Repositories'
-
-sudo apt update
-
-colorecho 'Finished Updating Repositories'
-
-colorecho 'Starting Installing System Soft'
-
-sudo apt -y install build-essential net-tools dnsutils isc-dhcp-server nfs-common cifs-utils apt-transport-https
-
-colorecho 'Finished Installing System Soft'
-
-colorecho 'Starting Installing Basic Soft'
-
-sudo apt -y install git vim wget curl peco firefox-esr zip unzip p7zip-full guake torbrowser-launcher
-
-colorecho 'Finished Installing Basic Soft'
-
-colorecho 'Starting Configuring System'
-
-sudo chown -R ${USER}:${USER} /opt
-
-colorecho 'Finished Configuring System'
+install_summary

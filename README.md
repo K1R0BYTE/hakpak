@@ -1,6 +1,6 @@
 # What is it?
 
-Predefined hacking toolset with configs(zsh, tmux, burp, os)
+Predefined hacking toolset with configs (zsh, tmux, os)
 
 For clean installed OS with saved top used commands history(.zsh_history)
 
@@ -11,60 +11,70 @@ To make comfortable hacking enviroment fast and efficient
 # Requirements
 
 ```
-Kali linux: no prerequisites
-
-Other linux distro: add Kali repositories (setup/addrep.sh)
+Any apt-based distro: Debian 12+, Ubuntu 22.04+ or Kali
 ```
 
 # How to Install?
 
 ```
-sudo apt update && sudo apt -y upgrade && sudo apt -y install git 
+sudo apt update && sudo apt -y upgrade && sudo apt -y install git
 
 git clone https://github.com/K1R0BYTE/hakpak.git ${HOME}/.hakpak && cd ${HOME}/.hakpak/install
 
 bash setup.sh
+```
 
-Type "exit" during installation of zsh in "install git:(main)" prompt
+Run `setup.sh` as your normal user, not with sudo. Your user needs sudo rights; the scripts ask for your password only for the steps that need root (apt packages, `/usr/local`, `/etc`). Everything else installs as you: Go tools into `/opt/go`, pipx tools into `~/.local/bin`, and git tools into `/opt/<tool>`, owned by you.
+
+After the install, log out and back in once: that picks up your new shell (zsh), the PATH for Go and pipx tools, and the wireshark group.
+
+You can clone it anywhere; the scripts find the repo from their own path.
+
+If a tool fails to install, the rest keep going and each section lists what failed at the end.
+
+To see what a section would do without changing anything:
+
+```
+HAKPAK_DRY_RUN=1 bash web-soft.sh
 ```
 
 # Toolset:
 
 ## System (apt)
 
-* build-essential 
+* build-essential
 * net-tools
-* dnsutils
-* isc-dhcp-server
+* bind9-dnsutils
 * nfs-common
 * cifs-utils
-* apt-transport-https
 
 ## Basic (apt+configs)
+* git
 * vim
 * wget
 * curl
-* peco
-* firefox-esr
-* torbrowser-launcher
+* fzf (Ctrl+R history search)
 * zip
 * unzip
 * p7zip-full
-* guake
-* zsh (plugins, config)
-* tmux (plugins, config)
+* xclip
+* zsh (oh-my-zsh, plugins, config)
+* tmux (tpm, plugins, config)
 
-## Enviroment (apt+pip)
+## Surfing (apt)
+
+* firefox-esr (Debian) / firefox (Ubuntu)
+* torbrowser-launcher
+
+## Environment (apt+go.dev)
 
 ### Python
 
 * python3-pip
-* virtualenv
-
-### Python libs
-
-* requests 
-* setuptools
+* python3-venv
+* pipx
+* python3-requests
+* python3-setuptools
 
 ### Jython
 
@@ -72,58 +82,80 @@ Type "exit" during installation of zsh in "install git:(main)" prompt
 
 ### Golang
 
-* golang
+* latest Go from go.dev, in /usr/local/go
 
-## Web Tools (apt+git+direct)
+## Web Tools
 
-* sqlmap
-* cmseek
-* nikto
-* wpscan
-* wafw00f
-* whatweb
-* arjun
-* httprobe (git)
-* hakrawler (git)
-* gospider (git)
-* gobuster
-* wfuzz
-* ffuf
-* eyewitness
-* burpsuite-community
-* burpsuite-pro-2021.8.4 (direct)
+* sqlmap (pipx)
+* wafw00f (pipx)
+* arjun (pipx)
+* whatweb (apt)
+* nikto (git)
+* wpscan (gem)
+* httpx (go)
+* katana (go)
+* gobuster (go)
+* ffuf (go)
+* wfuzz (apt)
+* gowitness (go)
 
-## Pentest Tools (apt+git)
+## Pentest Tools
 
-* wireshark
-* tcpdump
-* metasploit-framework
-* exploitdb
-* hydra
-* hashcat
-* john
-* nuclei
-* nmap
-* masscan
-* dnmasscan
-* gospider (git)
-* subdomainizer (git)
-* subscraper (git)
-* subfinder (git)
-* asnlookup (git)
-* metabigor (git)
-* domlink (git)
-* amass
-* interlace (git)
-* linpeas (git)
+* wireshark (apt)
+* metasploit-framework (Rapid7 installer)
+* exploitdb / searchsploit (git)
+* hydra (apt)
+* hashcat (apt)
+* john (apt)
+* nuclei (go)
+* nmap (apt)
+* masscan (apt)
+* subdomainizer (git+venv)
+* subfinder (go)
+* amass (go)
+* asnmap (go)
+* linpeas (PEASS-ng release)
+
+## MiTM
+
+* hostapd (apt)
+* dnsmasq-base (apt)
+* iptables (apt)
+* tcpdump (apt)
+* mitmproxy (pipx)
+
+Sample configs live in `configs/mitm/`:
+- `hostapd.conf`: a WPA2 network called `hakpak`, password `hacktheplanet`. It uses 2.4 GHz 802.11n (20 MHz) on channel 6 so nearly any adapter and client works.
+- `dnsmasq.conf`: DHCP and DNS for clients on 10.0.0.0/24.
+
+No extra drivers are needed for hostapd: it talks to the kernel's standard Wi-Fi interface (nl80211). Your adapter's driver must support AP mode, and `setup-router --ap` checks that first. Adapters with in-kernel drivers that do: Atheros AR9271, Ralink RT3070/RT5370, MediaTek MT7610U/MT7612U. Most Realtek ones (RTL8812AU and others) need out-of-tree drivers. WSL has no Wi-Fi access, so run the AP on real Linux or a VM with the USB adapter passed through.
+
+`setup-router` turns the machine into a router: it NATs clients on the in interface out through the out interface, turns on IP forwarding, and redirects chosen TCP ports to your proxy.
+
+```
+setup-router --ap                    # Wi-Fi AP on wlan0, internet via eth0, 80/443 -> localhost:8080
+setup-router -i eth1 -o wlan0 -p 80  # wired clients on eth1, only HTTP redirected
+setup-router -t 192.168.1.50:8080    # send traffic to Burp (invisible mode) on another machine
+setup-router --no-redirect           # plain router, no interception
+setup-router --down                  # remove everything it added
+mitmproxy --mode transparent --showhost
+```
+
+Run it without `-i`/`-o` to pick the interfaces from a list. When 443 is redirected, QUIC (UDP 443) is blocked so browsers fall back to TCP through the proxy. If any step fails, setup-router undoes what it did. `setup-router --help` shows every option.
 
 ## Wordlists (git)
 
 * seclists (git)
-* fuzz-b00m (git)
 
 ## WSL (apt+configs)
 
 * xfce4
 * xrdp
 * dbus-x11
+
+# Tests
+
+```
+bats tests
+shellcheck -x install/*.sh tools/setup-router
+```
