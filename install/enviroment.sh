@@ -2,6 +2,7 @@
 # Environment section: Python, Jython and Go.
 # shellcheck source=install/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+require_normal_user
 
 # Python: system pip stays untouched (PEP 668); tools go through pipx or a venv.
 install_tool apt python "python3-pip python3-venv pipx python3-requests python3-setuptools"

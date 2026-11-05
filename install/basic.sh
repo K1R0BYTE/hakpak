@@ -2,6 +2,7 @@
 # Basic section: everyday tools, zsh and tmux.
 # shellcheck source=install/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+require_normal_user
 
 install_tool apt basic-packages "git vim wget curl zip unzip p7zip-full xclip fzf"
 
