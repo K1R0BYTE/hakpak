@@ -131,13 +131,13 @@ Sample configs live in `configs/mitm/`: `hostapd.conf` (an open Wi-Fi network ca
 ```
 setup-router --ap                    # Wi-Fi AP on wlan0, internet via eth0, 80/443 -> localhost:8080
 setup-router -i eth1 -o wlan0 -p 80  # wired clients on eth1, only HTTP redirected
-setup-router -t 192.168.1.50:8080    # send traffic to a proxy on another machine
+setup-router -t 192.168.1.50:8080    # send traffic to Burp (invisible mode) on another machine
 setup-router --no-redirect           # plain router, no interception
 setup-router --down                  # remove everything it added
 mitmproxy --mode transparent --showhost
 ```
 
-Run it without `-i`/`-o` to pick the interfaces from a list. `setup-router --help` shows every option.
+Run it without `-i`/`-o` to pick the interfaces from a list. When 443 is redirected, QUIC (UDP 443) is blocked so browsers fall back to TCP through the proxy. If any step fails, setup-router undoes what it did. `setup-router --help` shows every option.
 
 ## Wordlists (git)
 
