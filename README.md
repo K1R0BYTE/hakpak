@@ -1,6 +1,6 @@
 # What is it?
 
-Predefined hacking toolset with configs(zsh, tmux, burp, os)
+Predefined hacking toolset with configs (zsh, tmux, os)
 
 For clean installed OS with saved top used commands history(.zsh_history)
 
@@ -11,60 +11,65 @@ To make comfortable hacking enviroment fast and efficient
 # Requirements
 
 ```
-Kali linux: no prerequisites
-
-Other linux distro: add Kali repositories (setup/addrep.sh)
+Any apt-based distro: Debian 12+, Ubuntu 22.04+ or Kali
 ```
 
 # How to Install?
 
 ```
-sudo apt update && sudo apt -y upgrade && sudo apt -y install git 
+sudo apt update && sudo apt -y upgrade && sudo apt -y install git
 
 git clone https://github.com/K1R0BYTE/hakpak.git ${HOME}/.hakpak && cd ${HOME}/.hakpak/install
 
 bash setup.sh
+```
 
-Type "exit" during installation of zsh in "install git:(main)" prompt
+You can clone it anywhere; the scripts find the repo from their own path.
+
+If a tool fails to install, the rest keep going and each section lists what failed at the end.
+
+To see what a section would do without changing anything:
+
+```
+HAKPAK_DRY_RUN=1 bash web-soft.sh
 ```
 
 # Toolset:
 
 ## System (apt)
 
-* build-essential 
+* build-essential
 * net-tools
-* dnsutils
+* bind9-dnsutils
 * isc-dhcp-server
 * nfs-common
 * cifs-utils
-* apt-transport-https
 
 ## Basic (apt+configs)
+* git
 * vim
 * wget
 * curl
-* peco
-* firefox-esr
+* fzf (Ctrl+R history search)
+* firefox-esr (Debian) / firefox (Ubuntu)
 * torbrowser-launcher
 * zip
 * unzip
 * p7zip-full
-* guake
-* zsh (plugins, config)
-* tmux (plugins, config)
+* xclip
+* zsh (oh-my-zsh, plugins, config)
+* tmux (tpm, plugins, config)
 
-## Enviroment (apt+pip)
+## Environment (apt+go.dev)
 
 ### Python
 
 * python3-pip
+* python3-venv
+* pipx
 * virtualenv
-
-### Python libs
-
-* requests 
-* setuptools
+* python3-requests
+* python3-setuptools
 
 ### Jython
 
@@ -72,58 +77,55 @@ Type "exit" during installation of zsh in "install git:(main)" prompt
 
 ### Golang
 
-* golang
+* latest Go from go.dev, in /usr/local/go
 
-## Web Tools (apt+git+direct)
+## Web Tools
 
-* sqlmap
-* cmseek
-* nikto
-* wpscan
-* wafw00f
-* whatweb
-* arjun
-* httprobe (git)
-* hakrawler (git)
-* gospider (git)
-* gobuster
-* wfuzz
-* ffuf
-* eyewitness
-* burpsuite-community
-* burpsuite-pro-2021.8.4 (direct)
+* sqlmap (pipx)
+* wafw00f (pipx)
+* arjun (pipx)
+* whatweb (apt)
+* nikto (git)
+* wpscan (gem)
+* httpx (go)
+* katana (go)
+* gobuster (go)
+* ffuf (go)
+* wfuzz (apt)
+* gowitness (go)
 
-## Pentest Tools (apt+git)
+## Pentest Tools
 
-* wireshark
-* tcpdump
-* metasploit-framework
-* exploitdb
-* hydra
-* hashcat
-* john
-* nuclei
-* nmap
-* masscan
-* dnmasscan
-* gospider (git)
-* subdomainizer (git)
-* subscraper (git)
-* subfinder (git)
-* asnlookup (git)
-* metabigor (git)
-* domlink (git)
-* amass
-* interlace (git)
-* linpeas (git)
+* wireshark (apt)
+* tcpdump (apt)
+* metasploit-framework (Rapid7 installer)
+* exploitdb / searchsploit (git)
+* hydra (apt)
+* hashcat (apt)
+* john (apt)
+* nuclei (go)
+* nmap (apt)
+* masscan (apt)
+* subdomainizer (git+venv)
+* subfinder (go)
+* amass (go)
+* asnmap (go)
+* linpeas (PEASS-ng release)
 
 ## Wordlists (git)
 
 * seclists (git)
-* fuzz-b00m (git)
+* fuzz.txt (Bo0oM)
 
 ## WSL (apt+configs)
 
 * xfce4
 * xrdp
 * dbus-x11
+
+# Tests
+
+```
+bats tests
+shellcheck -x install/*.sh
+```
