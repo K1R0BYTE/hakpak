@@ -53,15 +53,14 @@ stub() {
   PATH="$BATS_TEST_TMPDIR/bin:$PATH"
 }
 
-# Drop every PATH directory that holds <command>, so a test doesn't depend
-# on what the test host already has installed.
-without_command() {
-  local dir keep=()
-  IFS=: read -r -a dirs <<< "$PATH"
-  for dir in "${dirs[@]}"; do
-    [ -e "$dir/$1" ] || keep+=("$dir")
-  done
-  PATH="$(IFS=:; echo "${keep[*]}")"
+# Run one custom install as if <command> weren't installed yet, so a test
+# doesn't depend on what the test host has (CI runners ship gcloud and az).
+install_missing() {
+  local cmd="$1"
+  shift
+  lib
+  eval "has_command() { [ \"\$1\" != $cmd ] && command -v \"\$1\" >/dev/null 2>&1; }"
+  install_tool "$@"
 }
 
 GCLOUD_LINE='deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main'
@@ -202,16 +201,15 @@ GCLOUD_LINE='deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packag
   recorded "aws/install"
 }
 
-@test "cloud section installs google-cloud-cli from Google's repo with a signed-by keyring" {
-  without_command gcloud
-  section cloud.sh
+@test "gcloud installs google-cloud-cli from Google's repo with a signed-by keyring" {
+  install_missing gcloud custom gcloud _install_gcloud
   recorded "https://packages.cloud.google.com/apt/doc/apt-key.gpg"
   recorded "$(printf '%q' "$GCLOUD_LINE")"
   recorded "apt-get install -y google-cloud-cli"
 }
 
-@test "cloud section installs azure-cli from Microsoft's repo for the distro codename" {
-  section cloud.sh
+@test "az installs azure-cli from Microsoft's repo for the distro codename" {
+  install_missing az custom az _install_azure_cli
   recorded "https://packages.microsoft.com/keys/microsoft.asc"
   recorded "$(printf '%q' 'deb [signed-by=/etc/apt/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/azure-cli/ bookworm main')"
   recorded "apt-get install -y azure-cli"
