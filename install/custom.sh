@@ -26,7 +26,9 @@ _install_go_toolchain() {
     version="${HAKPAK_GO_VERSION:-$(curl -fsSL 'https://go.dev/VERSION?m=text' | head -n1)}"
   fi
   [ -n "$version" ] || { echo "could not find the latest Go version"; return 1; }
-  if [ -x /usr/local/go/bin/go ] && [ "$(/usr/local/go/bin/go env GOVERSION)" = "$version" ]; then
+  # Read the version file instead of running go, which writes telemetry
+  # counters to your home even for `go env`.
+  if [ -x /usr/local/go/bin/go ] && [ "$(head -n1 /usr/local/go/VERSION 2>/dev/null)" = "$version" ]; then
     log_ok "Go $version already installed"
     return 0
   fi
