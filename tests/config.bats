@@ -135,7 +135,7 @@ lib() {
   [ "$(cat "$HAKPAK_SYSROOT/etc/wsl.conf.bak")" = "original" ]
 }
 
-@test "link_config for /etc updates a changed copy but keeps the first backup" {
+@test "link_config for /etc updates a changed copy, keeping the first backup and your edits" {
   echo original > "$HAKPAK_SYSROOT/etc/wsl.conf"
   lib
   link_config wsl.conf /etc/wsl.conf
@@ -143,6 +143,7 @@ lib() {
   link_config wsl.conf /etc/wsl.conf
   cmp -s "$REPO/configs/wsl.conf" "$HAKPAK_SYSROOT/etc/wsl.conf"
   [ "$(cat "$HAKPAK_SYSROOT/etc/wsl.conf.bak")" = "original" ]
+  grep -qx edited "$HAKPAK_SYSROOT"/etc/wsl.conf.bak.*
 }
 
 @test "link_config for /etc replaces an old symlink into the repo with a copy" {
@@ -186,20 +187,34 @@ lib() {
 @test "merge_history creates a private history file when there is none" {
   lib
   merge_history zsh/.zsh_history "$HOME/.zsh_history"
-  cmp -s "$REPO/configs/zsh/.zsh_history" "$HOME/.zsh_history"
+  # same entries, ending in a newline (the curated file has none)
+  diff <(sed -e '$a\' "$REPO/configs/zsh/.zsh_history") "$HOME/.zsh_history"
   [ "$(stat -c %a "$HOME/.zsh_history")" = "600" ]
 }
 
 @test "merge_history turns an old symlink into the repo into your own file" {
-  cp "$REPO/configs/zsh/.zsh_history" "$BATS_TEST_TMPDIR/tracked"
-  echo ': 1700000002:0;typed-before' >> "$BATS_TEST_TMPDIR/tracked"
-  ln -s "$BATS_TEST_TMPDIR/tracked" "$HOME/.zsh_history"
+  # A copy of the repo, so the test can't touch the real tracked file.
+  cp -r "$REPO/install" "$REPO/configs" "$BATS_TEST_TMPDIR/"
+  REPO="$BATS_TEST_TMPDIR"
+  tracked="$REPO/configs/zsh/.zsh_history"
+  { sed -e '$a\' "$tracked"; echo ': 1700000002:0;typed-before'; } > "$tracked.new" && mv "$tracked.new" "$tracked"
+  ln -s "$tracked" "$HOME/.zsh_history"
   lib
   merge_history zsh/.zsh_history "$HOME/.zsh_history"
   [ ! -L "$HOME/.zsh_history" ]
   grep -qxF ': 1700000002:0;typed-before' "$HOME/.zsh_history"
-  # the linked file isn't touched
-  [ "$(tail -n1 "$BATS_TEST_TMPDIR/tracked")" = ': 1700000002:0;typed-before' ]
+  [ "$(tail -n1 "$tracked")" = ': 1700000002:0;typed-before' ]
+}
+
+@test "merge_history writes through your own link to somewhere else" {
+  mkdir -p "$HOME/sync"
+  echo ': 1700000000:0;mine' > "$HOME/sync/history"
+  ln -s "$HOME/sync/history" "$HOME/.zsh_history"
+  lib
+  merge_history zsh/.zsh_history "$HOME/.zsh_history"
+  [ "$(readlink "$HOME/.zsh_history")" = "$HOME/sync/history" ]
+  [ "$(tail -n1 "$HOME/sync/history")" = ': 1700000000:0;mine' ]
+  [ "$(wc -l < "$HOME/sync/history")" -gt 1 ]
 }
 
 @test "merge_history keeps a multi-line entry together" {
@@ -279,7 +294,8 @@ EOF
 
 @test "wsl section backs up xrdp.ini only once and anchors its edits" {
   section wsl.sh
-  grep -q 'cp -n /etc/xrdp/xrdp.ini /etc/xrdp/xrdp.ini.bak' "$HAKPAK_DRY_RUN_LOG"
+  grep -q 'cp -p /etc/xrdp/xrdp.ini /etc/xrdp/xrdp.ini.bak' "$HAKPAK_DRY_RUN_LOG"
+  grep -q 'if \[ ! -e /etc/xrdp/xrdp.ini.bak \]' "$REPO/install/wsl.sh"
   ! grep -q 's/max_bpp=32/#max_bpp' "$REPO/install/wsl.sh"
 }
 
@@ -288,8 +304,8 @@ EOF
 [Globals]
 port=3389
 max_bpp=32
-[Xorg]
-xserverbpp=24
+[Xvnc]
+#xserverbpp=24
 EOF
   expr="$(grep -o "s/^port=3389.*'" "$REPO/install/wsl.sh" | head -n1)"
   expr="${expr%\'}"
