@@ -285,3 +285,81 @@ outro" ]
 @test "README no longer says it's for Kali only" {
   ! grep -qi 'kali only\|kali-only\|only kali' "$REPO/README.md"
 }
+
+# --- review fixes ---
+
+@test "a broken manifest makes the section fail its summary" {
+  manifest <<'EOF2'
+web  brew  ffuf
+EOF2
+  lib
+  install_section web || true
+  run install_summary
+  [ "$status" -ne 0 ]
+}
+
+@test "install_section fails on a section with no tools" {
+  manifest <<'EOF2'
+web  apt  wfuzz
+EOF2
+  lib
+  run install_section webb
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"no tools in section webb"* ]]
+}
+
+@test "\$HOME with an & in it expands as is" {
+  manifest <<'EOF2'
+basic  git  tpm  https://github.com/tmux-plugins/tpm  $HOME/.tmux/plugins/tpm
+EOF2
+  export HOME="$BATS_TEST_TMPDIR/a&b"
+  mkdir -p "$HOME"
+  lib
+  install_section basic
+  grep -qF "a\\&b/.tmux/plugins/tpm" "$HAKPAK_DRY_RUN_LOG" || { cat "$HAKPAK_DRY_RUN_LOG"; return 1; }
+}
+
+@test "a section's apt tools install in one apt-get call" {
+  manifest <<'EOF2'
+mitm  apt   hostapd
+mitm  pipx  mitmproxy
+mitm  apt   iw
+EOF2
+  lib
+  install_section mitm
+  recorded "apt-get install -y hostapd iw"
+  [ "$(grep -c 'apt-get install' "$HAKPAK_DRY_RUN_LOG")" -eq 1 ]
+}
+
+@test "when the batched apt-get fails, each apt tool is tried on its own and only the bad one fails" {
+  manifest <<'EOF2'
+mitm  apt  hostapd
+mitm  apt  no-such-package
+mitm  apt  iw
+EOF2
+  unset HAKPAK_DRY_RUN
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  # sudo stub: log the apt-get call, fail if it names the bad package.
+  cat > "$BATS_TEST_TMPDIR/bin/sudo" <<STUB
+#!/bin/sh
+echo "\$*" >> "$HAKPAK_DRY_RUN_LOG"
+case " \$* " in *" no-such-package "*) exit 100 ;; esac
+exit 0
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/sudo"
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH"
+  lib
+  install_section mitm
+  recorded "apt-get install -y hostapd no-such-package iw"
+  recorded "apt-get install -y hostapd"
+  recorded "apt-get install -y iw"
+  [ "${HAKPAK_FAILED[*]}" = "no-such-package" ]
+}
+
+@test "a failing oh-my-zsh plugin is reported by its own name" {
+  lib
+  _install_git() { [ "$1" != zsh-autosuggestions ]; }
+  touch_home="$HOME/.oh-my-zsh"; mkdir -p "$touch_home"; touch "$touch_home/oh-my-zsh.sh"
+  install_tool custom oh-my-zsh _install_oh_my_zsh || true
+  [ "${HAKPAK_FAILED[*]}" = "zsh-autosuggestions" ]
+}

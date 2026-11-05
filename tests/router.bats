@@ -231,5 +231,5 @@ IW
 
 @test "mitm section installs iw for the AP check" {
   run bash "$REPO/install/mitm.sh"
-  grep -qxF "sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y iw" "$HAKPAK_DRY_RUN_LOG"
+  grep -qE 'apt-get install -y .*\biw$' "$HAKPAK_DRY_RUN_LOG"
 }

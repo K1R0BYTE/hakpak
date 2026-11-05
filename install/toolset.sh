@@ -136,27 +136,62 @@ toolset_check() {
 }
 
 # Replace $HOME and $HAKPAK_OPT in one source field. Nothing else expands.
+# The replacements are quoted so an `&` in them stays literal (bash 5.2).
 _toolset_expand() {
   local s="$1"
-  s="${s//\$HAKPAK_OPT/$HAKPAK_OPT}"
-  s="${s//\$HOME/$HOME}"
+  s="${s//\$HAKPAK_OPT/"$HAKPAK_OPT"}"
+  s="${s//\$HOME/"$HOME"}"
   printf '%s' "$s"
 }
 
+# Install every row of one section. Its apt tools go first, in one apt-get
+# call; if that fails, each is tried on its own so only the bad ones are
+# reported. The other tools follow in manifest order.
 install_section() {
-  local id="$1" row kind name src a
-  local -a rows args src_args
-  toolset_check || { echo "toolset: fix $HAKPAK_TOOLSET first"; return 1; }
+  local id="$1" row kind name src a i
+  local -a rows args src_args apt_names=() apt_args=() other=() packages=()
+  if ! toolset_check; then
+    echo "toolset: fix $HAKPAK_TOOLSET first"
+    HAKPAK_FAILED+=("toolset")
+    return 1
+  fi
   # Read every row before installing: install commands may read stdin.
   mapfile -t rows < <(_toolset_select "$id")
+  if [ "${#rows[@]}" -eq 0 ]; then
+    echo "toolset: no tools in section $id"
+    HAKPAK_FAILED+=("section $id")
+    return 1
+  fi
   for row in "${rows[@]}"; do
+    IFS="$_TS" read -r _ _ kind name src _ <<< "$row"
+    if [ "$kind" = apt ]; then
+      apt_names+=("$name")
+      apt_args+=("$src")
+      read -r -a src_args <<< "${src:-$name}"
+      for a in "${src_args[@]}"; do packages+=("$(_toolset_expand "$a")"); done
+    else
+      other+=("$row")
+    fi
+  done
+  if [ "${#apt_names[@]}" -gt 0 ]; then
+    log "Installing ${apt_names[*]}"
+    if apt_install "${packages[@]}"; then
+      log_ok "Installed ${apt_names[*]}"
+    else
+      for i in "${!apt_names[@]}"; do
+        read -r -a src_args <<< "${apt_args[$i]}"
+        args=()
+        for a in "${src_args[@]}"; do args+=("$(_toolset_expand "$a")"); done
+        install_tool apt "${apt_names[$i]}" "${args[*]}" || true
+      done
+    fi
+  fi
+  for row in "${other[@]}"; do
     IFS="$_TS" read -r _ _ kind name src _ <<< "$row"
     args=()
     read -r -a src_args <<< "$src"
-    for a in "${src_args[@]}"; do
-      args+=("$(_toolset_expand "$a")")
-    done
-    install_tool "$kind" "$name" "${args[@]}"
+    for a in "${src_args[@]}"; do args+=("$(_toolset_expand "$a")"); done
+    install_tool "$kind" "$name" "${args[@]}" || true
   done
   return 0
 }
