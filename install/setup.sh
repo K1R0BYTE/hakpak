@@ -41,9 +41,12 @@ colorecho3 'Please select installation mode, choose 1 or 2 !\n'
         bash enviroment.sh
         # Basic
         bash basic.sh
+        # Surfing
+        bash surfing.sh
         # Security Soft
         bash web-soft.sh
         bash pentest-soft.sh
+        bash mitm.sh
         # Wordlists
         bash wordlists.sh
         # WSL

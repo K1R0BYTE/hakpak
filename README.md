@@ -51,14 +51,17 @@ HAKPAK_DRY_RUN=1 bash web-soft.sh
 * wget
 * curl
 * fzf (Ctrl+R history search)
-* firefox-esr (Debian) / firefox (Ubuntu)
-* torbrowser-launcher
 * zip
 * unzip
 * p7zip-full
 * xclip
 * zsh (oh-my-zsh, plugins, config)
 * tmux (tpm, plugins, config)
+
+## Surfing (apt)
+
+* firefox-esr (Debian) / firefox (Ubuntu)
+* torbrowser-launcher
 
 ## Environment (apt+go.dev)
 
@@ -67,7 +70,6 @@ HAKPAK_DRY_RUN=1 bash web-soft.sh
 * python3-pip
 * python3-venv
 * pipx
-* virtualenv
 * python3-requests
 * python3-setuptools
 
@@ -97,7 +99,6 @@ HAKPAK_DRY_RUN=1 bash web-soft.sh
 ## Pentest Tools
 
 * wireshark (apt)
-* tcpdump (apt)
 * metasploit-framework (Rapid7 installer)
 * exploitdb / searchsploit (git)
 * hydra (apt)
@@ -112,10 +113,17 @@ HAKPAK_DRY_RUN=1 bash web-soft.sh
 * asnmap (go)
 * linpeas (PEASS-ng release)
 
+## MiTM
+
+* hostapd (apt)
+* dnsmasq-base (apt)
+* iptables (apt)
+* tcpdump (apt)
+* mitmproxy (pipx)
+
 ## Wordlists (git)
 
 * seclists (git)
-* fuzz.txt (Bo0oM)
 
 ## WSL (apt+configs)
 

@@ -190,7 +190,7 @@ section() {
 }
 
 @test "every section script runs cleanly in dry run" {
-  for s in system.sh enviroment.sh basic.sh web-soft.sh pentest-soft.sh wordlists.sh wsl.sh; do
+  for s in system.sh enviroment.sh basic.sh surfing.sh web-soft.sh pentest-soft.sh mitm.sh wordlists.sh wsl.sh; do
     : > "$HAKPAK_DRY_RUN_LOG"
     section "$s"
     [ "$status" -eq 0 ] || { echo "$s failed: $output"; return 1; }
@@ -228,12 +228,12 @@ section() {
 
 @test "section scripts don't call apt, go, pip or git directly" {
   run grep -nE '^\s*(sudo )?(apt|apt-get|go|pip3?|git) ' \
-    "$REPO"/install/{system,enviroment,basic,web-soft,pentest-soft,wordlists,wsl}.sh
+    "$REPO"/install/{system,enviroment,basic,surfing,web-soft,pentest-soft,mitm,wordlists,wsl}.sh
   [ "$status" -ne 0 ] || { echo "$output"; return 1; }
 }
 
 @test "section scripts don't define their own logger" {
-  run grep -n 'colorecho()' "$REPO"/install/{system,enviroment,basic,web-soft,pentest-soft,wordlists,wsl}.sh
+  run grep -n 'colorecho()' "$REPO"/install/{system,enviroment,basic,surfing,web-soft,pentest-soft,mitm,wordlists,wsl}.sh
   [ "$status" -ne 0 ]
 }
 
@@ -297,4 +297,47 @@ section() {
   _link_home_config "$REPO/configs/zsh/.zshrc" "$HOME/.zshrc"
   [ "$(cat "$HOME/.zshrc.bak")" = "original" ]
   [ "$(readlink "$HOME/.zshrc")" = "$REPO/configs/zsh/.zshrc" ]
+}
+
+# --- Surfing and MiTM sections ---
+
+@test "surfing section installs the browsers" {
+  section surfing.sh
+  recorded "torbrowser-launcher"
+  grep -qE 'apt-get install -y (firefox-esr|firefox)$' "$HAKPAK_DRY_RUN_LOG"
+}
+
+@test "basic section no longer installs the browsers" {
+  HOME="$BATS_TEST_TMPDIR/home"
+  mkdir -p "$HOME"
+  section basic.sh
+  not_recorded "torbrowser-launcher"
+  not_recorded "firefox"
+}
+
+@test "mitm section installs the access point and interception tools" {
+  section mitm.sh
+  recorded "apt-get install -y hostapd dnsmasq-base iptables tcpdump"
+  recorded "pipx install mitmproxy"
+}
+
+@test "tcpdump moved from pentest to mitm" {
+  section pentest-soft.sh
+  not_recorded "tcpdump"
+}
+
+@test "wordlists section no longer downloads fuzz.txt" {
+  section wordlists.sh
+  not_recorded "fuzz.txt"
+}
+
+@test "environment section uses python3-venv, not virtualenv" {
+  section enviroment.sh
+  recorded "python3-venv"
+  not_recorded "virtualenv"
+}
+
+@test "setup.sh runs the new sections" {
+  grep -q 'bash surfing.sh' "$REPO/install/setup.sh"
+  grep -q 'bash mitm.sh' "$REPO/install/setup.sh"
 }
