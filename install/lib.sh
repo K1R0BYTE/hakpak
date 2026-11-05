@@ -397,13 +397,13 @@ verify_sha256() {
 }
 
 # Check a detached signature: verify_gpg_signature <key.asc> <sig> <file>
-# Only the given key is trusted (gpgv with a keyring made from it, next to
-# the signature), never your own keyring.
+# Only the given key is trusted (gpgv with a keyring made from it, and its
+# home in the private dir next to the signature), never your own keyring.
 verify_gpg_signature() {
   local key="$1" sig="$2" file="$3" keyring
   keyring="$(cd "$(dirname "$sig")" && pwd)/hakpak-verify.gpg"
   gpg --batch --yes --dearmor -o "$keyring" < "$key" &&
-    gpgv --keyring "$keyring" "$sig" "$file"
+    GNUPGHOME="$(dirname "$keyring")" gpgv --keyring "$keyring" "$sig" "$file"
 }
 
 # Copy a downloaded key to <out> as a binary keyring, dearmoring it if it's
