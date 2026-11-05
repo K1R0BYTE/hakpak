@@ -199,7 +199,7 @@ section() {
 
 @test "pentest section installs nmap" {
   section pentest-soft.sh
-  recorded "apt-get install -y nmap"
+  grep -qE 'apt-get install -y .*\bnmap\b' "$HAKPAK_DRY_RUN_LOG"
 }
 
 @test "pentest section uses current sources for moved tools" {
