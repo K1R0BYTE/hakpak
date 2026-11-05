@@ -152,7 +152,6 @@ Run it without `-i`/`-o` to pick the interfaces from a list. When 443 is redirec
 * xfce4
 * xrdp
 * dbus-x11
-* dnsmasq (DHCP server, config in `configs/dnsmasq.conf`)
 
 # Tests
 

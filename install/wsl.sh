@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# WSL section: WSL config, DHCP server config and the xrdp remote desktop.
+# WSL section: WSL config and the xrdp remote desktop.
 # shellcheck source=install/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 require_normal_user
@@ -8,11 +8,7 @@ require_normal_user
 log 'Configuring WSL'
 step 'wsl.conf' sudo ln -sv "${HAKPAK_ROOT}/configs/wsl.conf" /etc/wsl.conf
 
-# DHCP server: dnsmasq in DHCP-only mode (configs/dnsmasq.conf). The config
-# is copied, not linked, so a root service never reads a file your user can edit.
-install_tool apt dnsmasq
-step 'dnsmasq.conf' sudo install -m 644 "${HAKPAK_ROOT}/configs/dnsmasq.conf" /etc/dnsmasq.d/hakpak.conf
-step 'dnsmasq.conf' sudo systemctl restart dnsmasq
+# DNS and DHCP are left to WSL itself.
 
 # Remote GUI
 install_tool apt remote-desktop "xfce4 xrdp dbus-x11"
