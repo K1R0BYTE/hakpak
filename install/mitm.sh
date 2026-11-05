@@ -2,6 +2,7 @@
 # MiTM section: rogue access point and traffic interception.
 # shellcheck source=install/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+require_normal_user
 
 # hostapd: Wi-Fi access point
 # dnsmasq-base: DHCP + DNS for the access point's clients. The -base package

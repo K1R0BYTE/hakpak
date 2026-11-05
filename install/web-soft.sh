@@ -2,6 +2,7 @@
 # Web Tools section.
 # shellcheck source=install/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+require_normal_user
 
 # Scanners
 install_tool pipx sqlmap

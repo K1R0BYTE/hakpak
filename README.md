@@ -24,6 +24,10 @@ git clone https://github.com/K1R0BYTE/hakpak.git ${HOME}/.hakpak && cd ${HOME}/.
 bash setup.sh
 ```
 
+Run `setup.sh` as your normal user, not with sudo. Your user needs sudo rights; the scripts ask for your password only for the steps that need root (apt packages, `/usr/local`, `/etc`). Everything else installs as you: Go tools into `/opt/go`, pipx tools into `~/.local/bin`, and git tools into `/opt/<tool>`, owned by you.
+
+After the install, log out and back in once: that picks up your new shell (zsh), the PATH for Go and pipx tools, and the wireshark group.
+
 You can clone it anywhere; the scripts find the repo from their own path.
 
 If a tool fails to install, the rest keep going and each section lists what failed at the end.
@@ -41,7 +45,6 @@ HAKPAK_DRY_RUN=1 bash web-soft.sh
 * build-essential
 * net-tools
 * bind9-dnsutils
-* isc-dhcp-server
 * nfs-common
 * cifs-utils
 
@@ -130,6 +133,7 @@ HAKPAK_DRY_RUN=1 bash web-soft.sh
 * xfce4
 * xrdp
 * dbus-x11
+* dnsmasq (DHCP server, config in `configs/dnsmasq.conf`)
 
 # Tests
 

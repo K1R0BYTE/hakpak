@@ -102,7 +102,7 @@ not_recorded() {
 }
 
 @test "git skips a destination that already exists" {
-  mkdir -p "$HAKPAK_OPT/exploitdb"
+  mkdir -p "$HAKPAK_OPT/exploitdb/.git"
   lib
   install_tool git exploitdb https://gitlab.com/exploit-database/exploitdb
   not_recorded "git clone"
@@ -240,14 +240,14 @@ section() {
 # --- review fixes ---
 
 @test "venv retries requirements when an earlier install didn't finish" {
-  mkdir -p "$HAKPAK_OPT/subdomainizer/.venv"
+  mkdir -p "$HAKPAK_OPT/subdomainizer/.venv" "$HAKPAK_OPT/subdomainizer/.git"
   lib
   install_tool venv subdomainizer https://github.com/nsonaniya2010/SubDomainizer
   recorded "pip install -r $HAKPAK_OPT/subdomainizer/requirements.txt"
 }
 
 @test "venv is skipped once requirements installed" {
-  mkdir -p "$HAKPAK_OPT/subdomainizer/.venv"
+  mkdir -p "$HAKPAK_OPT/subdomainizer/.venv" "$HAKPAK_OPT/subdomainizer/.git"
   touch "$HAKPAK_OPT/subdomainizer/.venv/.hakpak-installed"
   lib
   install_tool venv subdomainizer https://github.com/nsonaniya2010/SubDomainizer
@@ -321,9 +321,9 @@ section() {
   recorded "pipx install mitmproxy"
 }
 
-@test "tcpdump moved from pentest to mitm" {
+@test "tcpdump is in both pentest and mitm" {
   section pentest-soft.sh
-  not_recorded "tcpdump"
+  recorded "tcpdump"
 }
 
 @test "wordlists section no longer downloads fuzz.txt" {
@@ -340,4 +340,76 @@ section() {
 @test "setup.sh runs the new sections" {
   grep -q 'bash surfing.sh' "$REPO/install/setup.sh"
   grep -q 'bash mitm.sh' "$REPO/install/setup.sh"
+}
+
+# --- dnsmasq swap and sudo handling ---
+
+@test "system section no longer installs isc-dhcp-server" {
+  section system.sh
+  not_recorded "isc-dhcp-server"
+}
+
+@test "system section doesn't take over all of /opt" {
+  section system.sh
+  not_recorded "chown -R"
+}
+
+@test "wsl section sets up dnsmasq for DHCP instead of isc-dhcp-server" {
+  section wsl.sh
+  recorded "apt-get install -y dnsmasq"
+  recorded "install -m 644 $REPO/configs/dnsmasq.conf /etc/dnsmasq.d/hakpak.conf"
+  not_recorded "dhcpd.conf"
+}
+
+@test "dnsmasq config is DHCP only, so it doesn't take port 53" {
+  grep -qx 'port=0' "$REPO/configs/dnsmasq.conf"
+  grep -q '^dhcp-range=172.21.48.10,172.21.48.20' "$REPO/configs/dnsmasq.conf"
+  [ ! -e "$REPO/configs/dhcpd.conf" ]
+}
+
+@test "wsl section lets xrdp read its TLS key" {
+  section wsl.sh
+  recorded "adduser xrdp ssl-cert"
+}
+
+@test "pentest section lets your user capture with wireshark" {
+  section pentest-soft.sh
+  recorded "debconf-set-selections"
+  recorded "usermod -aG wireshark"
+}
+
+@test "sections refuse to run as root" {
+  unset HAKPAK_DRY_RUN
+  lib
+  _HAKPAK_EUID=0 run require_normal_user
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"not as root"* ]]
+}
+
+@test "sections run as a normal user" {
+  unset HAKPAK_DRY_RUN
+  lib
+  _HAKPAK_EUID=1000 run require_normal_user
+  [ "$status" -eq 0 ]
+}
+
+@test "every section script checks it isn't run as root" {
+  for s in system enviroment basic surfing web-soft pentest-soft mitm wordlists wsl; do
+    grep -q '^require_normal_user' "$REPO/install/$s.sh" || { echo "$s.sh"; return 1; }
+  done
+}
+
+@test "a destination under a directory you can't write is made with sudo and handed to you" {
+  [ "$(id -u)" -ne 0 ] || skip "root can write anywhere"
+  mkdir -p "$BATS_TEST_TMPDIR/ro"
+  chmod 555 "$BATS_TEST_TMPDIR/ro"
+  export HAKPAK_OPT="$BATS_TEST_TMPDIR/ro"
+  lib
+  install_tool git exploitdb https://gitlab.com/exploit-database/exploitdb
+  recorded "sudo mkdir -p $HAKPAK_OPT"
+  recorded "sudo chown"
+}
+
+@test "README says to run setup.sh without sudo" {
+  grep -qi 'not with sudo' "$REPO/README.md"
 }

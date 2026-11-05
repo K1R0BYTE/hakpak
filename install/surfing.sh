@@ -2,6 +2,7 @@
 # Surfing section: web browsers.
 # shellcheck source=install/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+require_normal_user
 
 # Debian ships firefox-esr; Ubuntu ships firefox.
 _install_firefox() {

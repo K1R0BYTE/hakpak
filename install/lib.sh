@@ -97,6 +97,38 @@ make_temp_dir() {
   mktemp -d "${TMPDIR:-/tmp}/hakpak.XXXXXXXX"
 }
 
+# Section scripts run as your normal user and call sudo only for the steps
+# that need root (apt, /usr/local, /etc). Run as root, user tools (pipx,
+# go, oh-my-zsh, history) would land in root's home instead of yours.
+# HAKPAK_ALLOW_ROOT=1 skips the check, e.g. in a container that only has root.
+require_normal_user() {
+  [ "${HAKPAK_DRY_RUN:-0}" = "1" ] && return 0
+  [ "${HAKPAK_ALLOW_ROOT:-0}" = "1" ] && return 0
+  if [ "${_HAKPAK_EUID:-$EUID}" -eq 0 ]; then
+    echo "Run hakpak as your normal user, not as root or with sudo. It asks for your password when a step needs it."
+    exit 1
+  fi
+  if ! has_command sudo; then
+    echo "hakpak needs sudo. Install it and add your user to the sudo group first."
+    exit 1
+  fi
+}
+
+# Make a directory for a tool. Where you can't write (a fresh /opt), it's
+# made with sudo and handed to your user, so the tool itself runs without sudo.
+ensure_dir() {
+  local dir="$1" parent="$1"
+  while [ ! -e "$parent" ]; do
+    parent="$(dirname "$parent")"
+  done
+  if [ -w "$parent" ]; then
+    run_step mkdir -p "$dir"
+  else
+    run_step sudo mkdir -p "$dir" &&
+      run_step sudo chown "$(id -un):$(id -gn)" "$dir"
+  fi
+}
+
 has_command() {
   command -v "$1" >/dev/null 2>&1
 }
@@ -142,11 +174,12 @@ _install_gem() {
 _install_git() {
   local name="$1" url="$2" dest="${3:-$HAKPAK_OPT/$1}"
   [ -n "$url" ] || { echo "git: missing url for $name"; return 1; }
-  if [ -e "$dest" ]; then
+  if [ -d "$dest/.git" ]; then
     log_ok "$name already cloned at $dest"
     return 0
   fi
-  run_step mkdir -p "$(dirname "$dest")" &&
+  # Clone into an (empty) directory owned by you.
+  ensure_dir "$dest" &&
     run_step git clone --depth 1 "$url" "$dest"
 }
 
@@ -172,7 +205,7 @@ _install_url() {
     log_ok "$name already downloaded"
     return 0
   fi
-  run_step mkdir -p "$(dirname "$dest")" &&
+  ensure_dir "$(dirname "$dest")" &&
     run_step curl -fsSL -o "$dest" "$url"
 }
 
