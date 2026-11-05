@@ -42,7 +42,7 @@ no_real_calls() {
 @test "no section arguments runs every section in install order" {
   setup_sh --dry-run
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-  [ "$(sections_run | paste -sd' ')" = "system environment basic surfing web pentest mitm wordlists wsl" ]
+  [ "$(sections_run | paste -sd' ')" = "system environment basic surfing web pentest cloud cicd mitm wordlists wsl" ]
   no_real_calls
   [ -z "$(find "$HOME" "$HAKPAK_OPT" "$HAKPAK_SYSROOT" -mindepth 1 -print -quit)" ]
 }
@@ -63,7 +63,7 @@ no_real_calls() {
   setup_sh web nope --dry-run
   [ "$status" -ne 0 ]
   [[ "$output" == *"unknown section: nope"* ]]
-  for s in system environment basic surfing web pentest mitm wordlists wsl; do
+  for s in system environment basic surfing web pentest cloud cicd mitm wordlists wsl; do
     [[ "$output" == *"$s"* ]] || { echo "missing $s in: $output"; return 1; }
   done
   [ -z "$(sections_run)" ]

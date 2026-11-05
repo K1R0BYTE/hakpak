@@ -129,3 +129,199 @@ _install_nuclei() {
   _install_go nuclei github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest &&
     run_step "$GOPATH/bin/nuclei" -update-templates
 }
+
+# --- Cloud ---
+
+# The distro codename (bookworm, noble) from os-release.
+# HAKPAK_OS_RELEASE points it at another file (tests use this).
+_distro_codename() {
+  local codename
+  # shellcheck disable=SC1090 # os-release is a plain key=value file
+  codename="$(. "${HAKPAK_OS_RELEASE:-/etc/os-release}" 2>/dev/null && echo "${VERSION_CODENAME:-${UBUNTU_CODENAME:-}}")"
+  if ! [[ "$codename" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+    echo "can't tell the distro codename from ${HAKPAK_OS_RELEASE:-/etc/os-release}" >&2
+    return 1
+  fi
+  echo "$codename"
+}
+
+# Latest release tag of a GitHub repo (v3.90.1). github.com answers
+# releases/latest with JSON when asked for it, without the rate-limited API.
+# A tag that isn't a plain version is refused: it goes into paths and URLs.
+_github_latest_tag() {
+  local repo="$1" tag
+  if [ "${HAKPAK_DRY_RUN:-0}" = "1" ]; then
+    echo "v0.0.0"
+    return 0
+  fi
+  tag="$(curl -fsSL -H 'Accept: application/json' "https://github.com/$repo/releases/latest" |
+    sed -n 's/.*"tag_name":"\([^"]*\)".*/\1/p')"
+  if ! [[ "$tag" =~ ^v?[0-9]+(\.[0-9]+)*$ ]]; then
+    echo "could not find the latest release of $repo" >&2
+    return 1
+  fi
+  echo "$tag"
+}
+
+# CPU name in release asset names (amd64, arm64); other CPUs have no build.
+_release_arch() {
+  local arch
+  arch="$(_go_arch)"
+  case "$arch" in
+    amd64|arm64) echo "$arch" ;;
+    *) echo "$1 has no build for $(uname -m)" >&2; return 1 ;;
+  esac
+}
+
+# Download one release asset and its checksum manifest, check the asset,
+# and install the binary as /usr/local/bin/<name>. A .tar.gz asset is
+# unpacked first and its <name> file installed:
+#   _install_release_binary <name> <release-url> <asset> <checksums-file>
+_install_release_binary() {
+  local name="$1" base="$2" asset="$3" sums="$4" tmp bin rc
+  tmp="$(make_temp_dir)" || return 1
+  bin="$tmp/$asset"
+  run_step curl -fsSL -o "$tmp/$asset" "$base/$asset" &&
+    run_step curl -fsSL -o "$tmp/$sums" "$base/$sums" &&
+    run_step verify_sha256 "$tmp/$asset" "$tmp/$sums" "$asset"
+  rc=$?
+  if [ "$rc" -eq 0 ] && [[ "$asset" == *.tar.gz ]]; then
+    run_step mkdir "$tmp/unpacked" &&
+      run_step tar -C "$tmp/unpacked" --no-same-owner -xzf "$tmp/$asset"
+    rc=$?
+    bin="$tmp/unpacked/$name"
+  fi
+  if [ "$rc" -eq 0 ]; then
+    run_step sudo install -m 755 "$bin" "/usr/local/bin/$name"
+    rc=$?
+  fi
+  run_step rm -rf "$tmp"
+  return $rc
+}
+
+# AWS CLI v2 from AWS's zip, checked against its signature with the AWS CLI
+# Team key in install/keys/aws-cli.asc. AWS ships no apt package for v2.
+# An existing install (in /usr/local/aws-cli) is updated in place.
+_install_aws_cli() {
+  local arch tmp url rc
+  local -a update=()
+  case "$(uname -m)" in
+    x86_64) arch=x86_64 ;;
+    aarch64|arm64) arch=aarch64 ;;
+    *) echo "the AWS CLI has no build for $(uname -m)"; return 1 ;;
+  esac
+  [ -d /usr/local/aws-cli ] && update=(--update)
+  if ! has_command unzip; then
+    apt_install unzip || return 1
+  fi
+  if ! has_command gpg || ! has_command gpgv; then
+    apt_install gnupg gpgv || return 1
+  fi
+  url="https://awscli.amazonaws.com/awscli-exe-linux-$arch.zip"
+  tmp="$(make_temp_dir)" || return 1
+  run_step curl -fsSL -o "$tmp/awscliv2.zip" "$url" &&
+    run_step curl -fsSL -o "$tmp/awscliv2.zip.sig" "$url.sig" &&
+    run_step verify_gpg_signature "$HAKPAK_ROOT/install/keys/aws-cli.asc" "$tmp/awscliv2.zip.sig" "$tmp/awscliv2.zip" &&
+    run_step unzip -q "$tmp/awscliv2.zip" -d "$tmp" &&
+    run_step sudo "$tmp/aws/install" "${update[@]}"
+  rc=$?
+  run_step rm -rf "$tmp"
+  return $rc
+}
+
+# google-cloud-cli from Google's apt repo. The repo is the same for every
+# Debian and Ubuntu release.
+_install_gcloud() {
+  if has_command gcloud; then
+    log_ok "gcloud already installed"
+    return 0
+  fi
+  add_apt_repo google-cloud-sdk \
+    https://packages.cloud.google.com/apt/doc/apt-key.gpg \
+    /usr/share/keyrings/cloud.google.gpg \
+    'deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main' &&
+    apt_install google-cloud-cli
+}
+
+# azure-cli from Microsoft's apt repo. Microsoft publishes it only for
+# supported Debian and Ubuntu releases, so the repo is checked for your
+# codename before it's added; on any other distro (Kali) this fails.
+_install_azure_cli() {
+  local codename repo=https://packages.microsoft.com/repos/azure-cli
+  if has_command az; then
+    log_ok "az already installed"
+    return 0
+  fi
+  codename="$(_distro_codename)" || return 1
+  if ! run_step curl -fsSI -o /dev/null "$repo/dists/$codename/Release"; then
+    echo "Microsoft doesn't publish the Azure CLI for $codename (supported Debian and Ubuntu releases only)"
+    return 1
+  fi
+  add_apt_repo azure-cli \
+    https://packages.microsoft.com/keys/microsoft.asc \
+    /etc/apt/keyrings/microsoft.gpg \
+    "deb [signed-by=/etc/apt/keyrings/microsoft.gpg] $repo/ $codename main" &&
+    apt_install azure-cli
+}
+
+# Latest stable kubectl from dl.k8s.io, checked against its .sha256. The
+# pkgs.k8s.io apt repo pins one minor version per repo URL, so it isn't used.
+_install_kubectl() {
+  local arch version base tmp rc
+  arch="$(_go_arch)" || { echo "unsupported CPU: $(uname -m)"; return 1; }
+  if [ "${HAKPAK_DRY_RUN:-0}" = "1" ]; then
+    version="${HAKPAK_KUBECTL_VERSION:-v0.0.0}"
+  else
+    version="${HAKPAK_KUBECTL_VERSION:-$(curl -fsSL https://dl.k8s.io/release/stable.txt)}"
+  fi
+  if ! [[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "could not find the latest kubectl version"
+    return 1
+  fi
+  if [ -x /usr/local/bin/kubectl ] &&
+    /usr/local/bin/kubectl version --client 2>/dev/null | grep -qxF "Client Version: $version"; then
+    log_ok "kubectl $version already installed"
+    return 0
+  fi
+  base="https://dl.k8s.io/release/$version/bin/linux/$arch"
+  tmp="$(make_temp_dir)" || return 1
+  run_step curl -fsSL -o "$tmp/kubectl" "$base/kubectl" &&
+    run_step curl -fsSL -o "$tmp/kubectl.sha256" "$base/kubectl.sha256" &&
+    run_step verify_sha256 "$tmp/kubectl" "$tmp/kubectl.sha256" &&
+    run_step sudo install -m 755 "$tmp/kubectl" /usr/local/bin/kubectl
+  rc=$?
+  run_step rm -rf "$tmp"
+  return $rc
+}
+
+# Kubescape release binary, checked against the release's checksums.sha256
+# (what upstream's install.sh does, without its edits to your PATH).
+_install_kubescape() {
+  local arch tag
+  if has_command kubescape; then
+    log_ok "kubescape already installed"
+    return 0
+  fi
+  arch="$(_release_arch kubescape)" || return 1
+  tag="$(_github_latest_tag kubescape/kubescape)" || return 1
+  _install_release_binary kubescape \
+    "https://github.com/kubescape/kubescape/releases/download/$tag" \
+    "kubescape_${tag#v}_linux_${arch}" checksums.sha256
+}
+
+# --- CI/CD ---
+
+# TruffleHog release tarball, checked against the release's checksums.
+# `go install` doesn't work: its go.mod has replace directives.
+_install_trufflehog() {
+  local arch tag
+  if has_command trufflehog; then
+    log_ok "trufflehog already installed"
+    return 0
+  fi
+  arch="$(_release_arch trufflehog)" || return 1
+  tag="$(_github_latest_tag trufflesecurity/trufflehog)" || return 1
+  _install_release_binary trufflehog \
+    "https://github.com/trufflesecurity/trufflehog/releases/download/$tag" \
+    "trufflehog_${tag#v}_linux_${arch}.tar.gz" "trufflehog_${tag#v}_checksums.txt"
+}
