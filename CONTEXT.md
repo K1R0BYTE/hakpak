@@ -4,7 +4,7 @@
 
 **Toolset manifest**: `install/toolset.txt`. Each row is `section kind name [source...]`, with an optional `# note` for the README. Section scripts install their rows with `install_section <id>`, and `tools/gen-readme` writes the README tool list from it.
 
-**Section**: one group of the Toolset, installed by one script in `install/`: System, Environment, Basic, Surfing, Web Tools, Pentest Tools, MiTM, Wordlists, WSL.
+**Section**: one group of the Toolset, installed by one script in `install/`: System, Environment, Basic, Surfing, Web Tools, Pentest Tools, Cloud, CI/CD, MiTM, Wordlists, WSL.
 
 **Setup**: `install/setup.sh [section...] [--dry-run]`. No sections installs all of them; named sections install only those, always in install order. `--dry-run` turns on the Dry run. A failing section doesn't stop the next.
 

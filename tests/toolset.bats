@@ -119,12 +119,12 @@ EOF
 
 @test "check reports an unknown section" {
   manifest <<'EOF'
-cloud  apt  awscli
+clouds  apt  awscli
 EOF
   lib
   run toolset_check
   [ "$status" -ne 0 ]
-  [[ "$output" == *"unknown section: cloud"* ]]
+  [[ "$output" == *"unknown section: clouds"* ]]
 }
 
 @test "check reports a custom tool whose function doesn't exist" {

@@ -26,6 +26,12 @@
 #   merge_history <configs/path> <target>   add curated zsh history to yours
 # Both are safe to re-run.
 #
+# Vendor downloads (used by custom steps in install/custom.sh):
+#   add_apt_repo <name> <key-url> <keyring> <source line>   signed vendor apt repo
+#   verify_sha256 <file> <sums> [asset]                      check a download's hash
+#   verify_gpg_signature <key.asc> <sig> <file>              check a detached signature
+# Call the verify_* checks through run_step, so a dry run records them.
+#
 # Adapters: every side-effecting command goes through `run_step`. Normally it
 # executes; with HAKPAK_DRY_RUN=1 it records the command (one shell-quoted
 # line per command) to $HAKPAK_DRY_RUN_LOG, or stdout, and changes nothing.
@@ -364,6 +370,109 @@ _install_custom() {
   local name="$1" fn="$2"
   declare -F "$fn" >/dev/null || { echo "custom: no function $fn for $name"; return 1; }
   "$fn"
+}
+
+# --- vendor downloads ---
+
+# Check <file> against a sha256 manifest. With <asset>, the manifest has
+# "<hash>  <asset>" lines (sha256sum format) and the line for exactly that
+# asset is used. Without it, the manifest holds only the hash (kubectl.sha256).
+# A missing entry is a failure, not a skipped check.
+verify_sha256() {
+  local file="$1" sums="$2" asset="${3:-}" expected actual
+  if [ -n "$asset" ]; then
+    expected="$(awk -v a="$asset" '$2 == a || $2 == "*" a { print $1; exit }' "$sums")"
+  else
+    expected="$(awk 'NF { print $1; exit }' "$sums")"
+  fi
+  if ! [[ "$expected" =~ ^[0-9a-fA-F]{64}$ ]]; then
+    echo "no checksum for ${asset:-$(basename "$file")} in $(basename "$sums")"
+    return 1
+  fi
+  actual="$(sha256sum "$file" | awk '{ print $1 }')" || return 1
+  if [ "${expected,,}" != "$actual" ]; then
+    echo "checksum mismatch for ${asset:-$(basename "$file")}"
+    return 1
+  fi
+}
+
+# Check a detached signature: verify_gpg_signature <key.asc> <sig> <file>
+# Only the given key is trusted (gpgv with a keyring made from it, next to
+# the signature), never your own keyring.
+verify_gpg_signature() {
+  local key="$1" sig="$2" file="$3" keyring
+  keyring="$(cd "$(dirname "$sig")" && pwd)/hakpak-verify.gpg"
+  gpg --batch --yes --dearmor -o "$keyring" < "$key" &&
+    gpgv --keyring "$keyring" "$sig" "$file"
+}
+
+# Copy a downloaded key to <out> as a binary keyring, dearmoring it if it's
+# ASCII-armored. Fails when it isn't an OpenPGP key (an HTML error page).
+_dearmor_key() {
+  local in="$1" out="$2"
+  if grep -q -- '-----BEGIN PGP PUBLIC KEY BLOCK-----' "$in"; then
+    gpg --batch --yes --dearmor -o "$out" < "$in" || return 1
+  else
+    cp "$in" "$out" || return 1
+  fi
+  gpg --batch --homedir "$(dirname "$out")" --show-keys "$out" >/dev/null 2>&1 || {
+    echo "not an OpenPGP key: $in"
+    return 1
+  }
+}
+
+_write_line() {
+  printf '%s\n' "$1" > "$2"
+}
+
+# Add a vendor apt repo signed by its own key:
+#   add_apt_repo <name> <key-url> <keyring> <source line>
+# The key is downloaded to a temp dir and installed at <keyring> (no
+# apt-key); the source line, which must say signed-by=<keyring>, goes in
+# /etc/apt/sources.list.d/<name>.list. Then only that list is refreshed. A
+# repo whose list and keyring are both there already is skipped. If apt
+# can't read the new repo, its list is removed again so apt keeps working.
+add_apt_repo() {
+  local name="$1" key_url="$2" keyring="$3" line="$4"
+  local key list tmp rc
+  if ! [[ "$name" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+    echo "apt repo name must be a plain file name: $name"
+    return 1
+  fi
+  case "$keyring" in
+    /*) ;;
+    *) echo "apt repo $name: keyring must be an absolute path: $keyring"; return 1 ;;
+  esac
+  case "$line" in
+    *"signed-by=$keyring"[\ \]]*) ;;
+    *) echo "apt repo $name: source line must use signed-by=$keyring"; return 1 ;;
+  esac
+  key="$HAKPAK_SYSROOT$keyring"
+  list="$HAKPAK_SYSROOT/etc/apt/sources.list.d/$name.list"
+  if [ -f "$list" ] && [ -s "$key" ]; then
+    log_ok "$name apt repo already configured"
+    return 0
+  fi
+  if ! has_command gpg; then
+    apt_install gnupg || return 1
+  fi
+  tmp="$(make_temp_dir)" || return 1
+  run_step curl -fsSL -o "$tmp/$name.key" "$key_url" &&
+    run_step _dearmor_key "$tmp/$name.key" "$tmp/$name.gpg" &&
+    run_step _write_line "$line" "$tmp/$name.list" &&
+    _run_at "$key" install -d -m 755 "$(dirname "$key")" &&
+    _run_at "$key" install -m 644 "$tmp/$name.gpg" "$key" &&
+    _run_at "$list" install -d -m 755 "$(dirname "$list")" &&
+    _run_at "$list" install -m 644 "$tmp/$name.list" "$list"
+  rc=$?
+  run_step rm -rf "$tmp"
+  [ "$rc" -eq 0 ] || return "$rc"
+  if ! run_step sudo apt-get update -o "Dir::Etc::sourcelist=$list" \
+      -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0; then
+    echo "apt can't read the $name repo; removing $list"
+    _run_at "$list" rm -f "$list"
+    return 1
+  fi
 }
 
 install_tool() {

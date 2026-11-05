@@ -32,7 +32,7 @@ bash setup.sh --dry-run              # everything, without installing
 bash setup.sh --help                 # the section names
 ```
 
-Sections: `system`, `environment`, `basic`, `surfing`, `web`, `pentest`, `mitm`, `wordlists`, `wsl`. If one fails, the rest still run and `setup.sh` lists the failed sections at the end.
+Sections: `system`, `environment`, `basic`, `surfing`, `web`, `pentest`, `cloud`, `cicd`, `mitm`, `wordlists`, `wsl`. If one fails, the rest still run and `setup.sh` lists the failed sections at the end.
 
 Run `setup.sh` as your normal user, not with sudo. Your user needs sudo rights; the scripts ask for your password only for the steps that need root (apt packages, `/usr/local`, `/etc`). Everything else installs as you: Go tools into `/opt/go`, pipx tools into `~/.local/bin`, and git tools into `/opt/<tool>`, owned by you.
 
@@ -125,6 +125,23 @@ Every tool is one row in [`install/toolset.txt`](install/toolset.txt): its secti
 * amass (go)
 * asnmap (go)
 * linpeas (url): PEASS-ng release, in /opt/privesc
+
+## Cloud
+
+* aws: AWS CLI v2 from AWS, signature checked
+* gcloud: google-cloud-cli from Google's apt repo
+* az: azure-cli from Microsoft's apt repo, supported Debian and Ubuntu releases only
+* kubectl: latest stable from dl.k8s.io, checksum checked
+* prowler (pipx): needs Python 3.10 to 3.13
+* kubescape: release binary, checksum checked
+* pacu (pipx)
+* gcpwn (pipx): needs Python 3.11 or newer
+
+## CI/CD
+
+* trajan (go)
+* gato-x (pipx)
+* trufflehog: release binary, checksum checked
 
 ## MiTM
 
