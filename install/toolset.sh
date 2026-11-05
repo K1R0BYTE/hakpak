@@ -23,6 +23,8 @@ HAKPAK_SECTIONS=(
   "surfing:Surfing"
   "web:Web Tools"
   "pentest:Pentest Tools"
+  "cloud:Cloud"
+  "cicd:CI/CD"
   "mitm:MiTM"
   "wordlists:Wordlists"
   "wsl:WSL"

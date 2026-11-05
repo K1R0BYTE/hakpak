@@ -2,7 +2,7 @@
 #
 #   section  kind  name  [source...]  # note shown in the README
 #
-# Sections: system environment basic surfing web pentest mitm wordlists wsl
+# Sections: system environment basic surfing web pentest cloud cicd mitm wordlists wsl
 # Kinds (see install/lib.sh): apt go pipx gem git venv url custom
 #   custom: the source is a function in install/custom.sh
 # In a source, $HOME and $HAKPAK_OPT are replaced; nothing else expands.
@@ -73,6 +73,21 @@ pentest  go      subfinder      github.com/projectdiscovery/subfinder/v2/cmd/sub
 pentest  go      amass          github.com/owasp-amass/amass/v5/cmd/amass@latest
 pentest  go      asnmap         github.com/projectdiscovery/asnmap/cmd/asnmap@latest
 pentest  url     linpeas        https://github.com/peass-ng/PEASS-ng/releases/latest/download/linpeas.sh  $HAKPAK_OPT/privesc/linpeas.sh  # PEASS-ng release, in /opt/privesc
+
+# --- Cloud ---
+cloud  custom  aws        _install_aws_cli      # AWS CLI v2 from AWS, signature checked
+cloud  custom  gcloud     _install_gcloud       # google-cloud-cli from Google's apt repo
+cloud  custom  az         _install_azure_cli    # azure-cli from Microsoft's apt repo, supported Debian and Ubuntu releases only
+cloud  custom  kubectl    _install_kubectl      # latest stable from dl.k8s.io, checksum checked
+cloud  pipx    prowler                          # needs Python 3.10 to 3.13
+cloud  custom  kubescape  _install_kubescape    # release binary, checksum checked
+cloud  pipx    pacu
+cloud  pipx    gcpwn                            # needs Python 3.11 or newer
+
+# --- CI/CD ---
+cicd  go      trajan      github.com/praetorian-inc/trajan/cmd/trajan@latest
+cicd  pipx    gato-x
+cicd  custom  trufflehog  _install_trufflehog   # release binary, checksum checked
 
 # --- MiTM ---
 mitm  apt   hostapd                             # Wi-Fi access point
