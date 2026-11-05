@@ -26,26 +26,16 @@ if install_tool custom oh-my-zsh _install_oh_my_zsh; then
   install_tool git zsh-autosuggestions https://github.com/zsh-users/zsh-autosuggestions "$ZSH_CUSTOM/plugins/zsh-autosuggestions"
 fi
 
-# Configs (full rework in issue #2). Back up a real file only, never
-# an earlier hakpak link, so re-runs don't overwrite the backup.
-_link_home_config() {
-  local src="$1" dest="$2"
-  if [ -L "$dest" ] && [ "$(readlink "$dest")" = "$src" ]; then
-    return 0
-  fi
-  if [ -e "$dest" ] && [ ! -L "$dest" ]; then
-    run_step mv "$dest" "$dest.bak" || return 1
-  fi
-  run_step ln -sfnv "$src" "$dest"
-}
-step .zshrc _link_home_config "${HAKPAK_ROOT}/configs/zsh/.zshrc" "${HOME}/.zshrc"
-step .zsh_history _link_home_config "${HAKPAK_ROOT}/configs/zsh/.zsh_history" "${HOME}/.zsh_history"
-step .dircolors _link_home_config "${HAKPAK_ROOT}/configs/.dircolors" "${HOME}/.dircolors"
+# Configs: your own files are backed up once, re-runs change nothing.
+step .zshrc link_config zsh/.zshrc "${HOME}/.zshrc"
+step .dircolors link_config .dircolors "${HOME}/.dircolors"
+# History is merged, not linked, so new commands stay out of the repo.
+step .zsh_history merge_history zsh/.zsh_history "${HOME}/.zsh_history"
 
 # Tmux
 install_tool apt tmux
 install_tool git tpm https://github.com/tmux-plugins/tpm "${HOME}/.tmux/plugins/tpm"
-step .tmux.conf _link_home_config "${HAKPAK_ROOT}/configs/tmux/.tmux.conf" "${HOME}/.tmux.conf"
+step .tmux.conf link_config tmux/.tmux.conf "${HOME}/.tmux.conf"
 # Reload only if a tmux server is running.
 if tmux info >/dev/null 2>&1; then
   step 'tmux reload' tmux source-file "${HOME}/.tmux.conf"

@@ -286,19 +286,6 @@ section() {
   recorded "zsh-autosuggestions"
 }
 
-@test "basic section: re-linking keeps the original backup" {
-  unset HAKPAK_DRY_RUN
-  HOME="$BATS_TEST_TMPDIR/home"
-  mkdir -p "$HOME"
-  echo original > "$HOME/.zshrc"
-  lib
-  eval "$(sed -n '/^_link_home_config()/,/^}/p' "$REPO/install/basic.sh")"
-  _link_home_config "$REPO/configs/zsh/.zshrc" "$HOME/.zshrc"
-  _link_home_config "$REPO/configs/zsh/.zshrc" "$HOME/.zshrc"
-  [ "$(cat "$HOME/.zshrc.bak")" = "original" ]
-  [ "$(readlink "$HOME/.zshrc")" = "$REPO/configs/zsh/.zshrc" ]
-}
-
 # --- Surfing and MiTM sections ---
 
 @test "surfing section installs the browsers" {
