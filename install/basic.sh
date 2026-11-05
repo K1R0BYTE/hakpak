@@ -4,18 +4,6 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 install_tool apt basic-packages "git vim wget curl zip unzip p7zip-full xclip fzf"
-# Separate call: on Debian it lives in contrib, which may not be enabled.
-install_tool apt torbrowser-launcher
-
-# Debian ships firefox-esr; Ubuntu ships firefox.
-_install_firefox() {
-  if apt-cache show firefox-esr >/dev/null 2>&1; then
-    apt_install firefox-esr
-  else
-    apt_install firefox
-  fi
-}
-install_tool custom firefox _install_firefox
 
 # ZSH
 ZSH="${HOME}/.oh-my-zsh"
