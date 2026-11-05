@@ -1,0 +1,91 @@
+# hakpak Toolset: every tool hakpak installs, one row per tool.
+#
+#   section  kind  name  [source...]  # note shown in the README
+#
+# Sections: system environment basic surfing web pentest mitm wordlists wsl
+# Kinds (see install/lib.sh): apt go pipx gem git venv url custom
+#   custom: the source is a function in install/custom.sh
+# In a source, $HOME and $HAKPAK_OPT are replaced; nothing else expands.
+#
+# After editing, run tools/gen-readme to update the README tool list.
+
+# --- System ---
+system  apt  build-essential
+system  apt  net-tools
+system  apt  bind9-dnsutils
+system  apt  nfs-common
+system  apt  cifs-utils
+
+# --- Environment ---
+environment  apt     python3-pip
+environment  apt     python3-venv
+environment  apt     pipx
+environment  apt     python3-requests
+environment  apt     python3-setuptools
+environment  apt     jython
+environment  custom  go  _install_go_toolchain  # latest Go from go.dev, in /usr/local/go
+
+# --- Basic ---
+basic  apt     git
+basic  apt     vim
+basic  apt     wget
+basic  apt     curl
+basic  apt     fzf                                # Ctrl+R history search
+basic  apt     zip
+basic  apt     unzip
+basic  apt     p7zip-full
+basic  apt     xclip
+basic  apt     zsh                                # with the hakpak config and history
+basic  custom  oh-my-zsh  _install_oh_my_zsh      # with zsh-syntax-highlighting and zsh-autosuggestions
+basic  apt     tmux                               # with the hakpak config
+basic  git     tpm  https://github.com/tmux-plugins/tpm  $HOME/.tmux/plugins/tpm
+
+# --- Surfing ---
+surfing  custom  firefox  _install_firefox        # firefox-esr on Debian, firefox on Ubuntu
+surfing  apt     torbrowser-launcher              # on Debian it's in contrib
+
+# --- Web Tools ---
+web  pipx    sqlmap
+web  pipx    wafw00f
+web  pipx    arjun
+web  apt     whatweb
+web  custom  nikto      _install_nikto            # git, linked into /usr/local/bin
+web  custom  wpscan     _install_wpscan           # gem, with its build dependencies
+web  go      httpx      github.com/projectdiscovery/httpx/cmd/httpx@latest
+web  go      katana     github.com/projectdiscovery/katana/cmd/katana@latest
+web  go      gobuster   github.com/OJ/gobuster/v3@latest
+web  go      ffuf       github.com/ffuf/ffuf/v2@latest
+web  apt     wfuzz
+web  go      gowitness  github.com/sensepost/gowitness@latest
+
+# --- Pentest Tools ---
+pentest  custom  wireshark      _install_wireshark   # apt, with tcpdump; your user can capture
+pentest  custom  metasploit     _install_metasploit  # Rapid7 installer
+pentest  custom  exploitdb      _install_exploitdb   # git, with searchsploit in /usr/local/bin
+pentest  apt     hydra
+pentest  apt     hashcat
+pentest  apt     john
+pentest  custom  nuclei         _install_nuclei      # go, with the latest templates
+pentest  apt     nmap
+pentest  apt     masscan
+pentest  venv    subdomainizer  https://github.com/nsonaniya2010/SubDomainizer  # git clone with its own venv
+pentest  go      subfinder      github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+pentest  go      amass          github.com/owasp-amass/amass/v5/cmd/amass@latest
+pentest  go      asnmap         github.com/projectdiscovery/asnmap/cmd/asnmap@latest
+pentest  url     linpeas        https://github.com/peass-ng/PEASS-ng/releases/latest/download/linpeas.sh  $HAKPAK_OPT/privesc/linpeas.sh  # PEASS-ng release, in /opt/privesc
+
+# --- MiTM ---
+mitm  apt   hostapd                             # Wi-Fi access point
+mitm  apt   dnsmasq-base                        # DHCP and DNS for AP clients, no system service
+mitm  apt   iptables                            # NAT and redirect rules
+mitm  apt   tcpdump
+mitm  apt   iw                                  # checks the Wi-Fi card can do AP mode
+mitm  pipx  mitmproxy
+
+# --- Wordlists ---
+wordlists  git  seclists  https://github.com/danielmiessler/SecLists  $HAKPAK_OPT/wordlists/seclists
+
+# --- WSL ---
+wsl  apt  xfce4
+wsl  apt  xrdp                                  # remote desktop on port 3390
+wsl  apt  dbus-x11
