@@ -24,6 +24,16 @@ git clone https://github.com/K1R0BYTE/hakpak.git ${HOME}/.hakpak && cd ${HOME}/.
 bash setup.sh
 ```
 
+With no arguments `setup.sh` installs every section. Name sections to install only those, in install order; `--dry-run` prints what would run and changes nothing:
+
+```
+bash setup.sh web pentest            # only Web Tools and Pentest Tools
+bash setup.sh --dry-run              # everything, without installing
+bash setup.sh --help                 # the section names
+```
+
+Sections: `system`, `environment`, `basic`, `surfing`, `web`, `pentest`, `mitm`, `wordlists`, `wsl`. If one fails, the rest still run and `setup.sh` lists the failed sections at the end.
+
 Run `setup.sh` as your normal user, not with sudo. Your user needs sudo rights; the scripts ask for your password only for the steps that need root (apt packages, `/usr/local`, `/etc`). Everything else installs as you: Go tools into `/opt/go`, pipx tools into `~/.local/bin`, and git tools into `/opt/<tool>`, owned by you.
 
 After the install, log out and back in once: that picks up your new shell (zsh), the PATH for Go and pipx tools, and the wireshark group.
@@ -37,7 +47,7 @@ Re-running a section is safe. Your own dotfiles (`.zshrc`, `.tmux.conf`, `.dirco
 To see what a section would do without changing anything:
 
 ```
-HAKPAK_DRY_RUN=1 bash web-soft.sh
+bash setup.sh --dry-run web
 ```
 
 # Toolset
