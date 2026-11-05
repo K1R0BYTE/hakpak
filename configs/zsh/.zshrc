@@ -71,7 +71,7 @@ COMPLETION_WAITING_DOTS="true"
 # Custom plugins may be added to $ZSH_CUSTOM/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
-plugins=(git zsh-syntax-highlighting zsh-autosuggestions zsh-peco-history)
+plugins=(git zsh-syntax-highlighting zsh-autosuggestions fzf)
 
 source $ZSH/oh-my-zsh.sh
 
@@ -101,10 +101,10 @@ source $ZSH/oh-my-zsh.sh
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
 
-# Resolve HAKPAK_DIR
-if [ -d "$HOME/.hakpak" ]; then
-    HAKPAK_DIR="$HOME/.hakpak"
-else
+# Resolve HAKPAK_DIR from this file's real path (~/.zshrc links here),
+# so the repo can be cloned anywhere.
+HAKPAK_DIR="${${(%):-%x}:A:h:h:h}"
+if [ ! -d "$HAKPAK_DIR/system" ]; then
     echo "Unable to find hakpak, exiting..."
     return
 fi

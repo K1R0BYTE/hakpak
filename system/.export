@@ -4,4 +4,7 @@ export SSH="$HOME/.ssh"
 # Golang
 export GO111MODULE=on
 export GOPATH="/opt/go"
-export PATH=$PATH:$(go env GOPATH)/bin
+export PATH="/usr/local/go/bin:$PATH:$GOPATH/bin"
+
+# pipx tools
+export PATH="$PATH:$HOME/.local/bin"

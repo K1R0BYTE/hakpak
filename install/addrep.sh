@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 RED="\033[1;31m"
+PURPLE="\033[0;35m"
 NOCOLOR="\033[0m"
 
 colorecho() {
@@ -33,7 +34,7 @@ colorecho2 '!!! WARNING !!!\nUpdating packages on non kali distro can break OS! 
 
         No)
 		
-        echo -e "${Red}Now you can switch to Kali distro or search how to add kali repository to your current linux distro safely"
+        echo -e "${RED}Now you can switch to Kali distro or search how to add kali repository to your current linux distro safely"
 		break
         ;;
 		esac
