@@ -236,3 +236,65 @@ section() {
   run grep -n 'colorecho()' "$REPO"/install/{system,enviroment,basic,web-soft,pentest-soft,wordlists,wsl}.sh
   [ "$status" -ne 0 ]
 }
+
+# --- review fixes ---
+
+@test "venv retries requirements when an earlier install didn't finish" {
+  mkdir -p "$HAKPAK_OPT/subdomainizer/.venv"
+  lib
+  install_tool venv subdomainizer https://github.com/nsonaniya2010/SubDomainizer
+  recorded "pip install -r $HAKPAK_OPT/subdomainizer/requirements.txt"
+}
+
+@test "venv is skipped once requirements installed" {
+  mkdir -p "$HAKPAK_OPT/subdomainizer/.venv"
+  touch "$HAKPAK_OPT/subdomainizer/.venv/.hakpak-installed"
+  lib
+  install_tool venv subdomainizer https://github.com/nsonaniya2010/SubDomainizer
+  not_recorded "pip install"
+}
+
+@test "a failed step is counted in the summary" {
+  unset HAKPAK_DRY_RUN
+  lib
+  step "wsl.conf" false || true
+  run install_summary
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"wsl.conf"* ]]
+}
+
+@test "make_temp_dir creates nothing in dry run" {
+  lib
+  d="$(make_temp_dir)"
+  [ ! -e "$d" ]
+}
+
+@test "make_temp_dir makes a private dir in a real run" {
+  unset HAKPAK_DRY_RUN
+  lib
+  d="$(make_temp_dir)"
+  [ -d "$d" ]
+  [ "$(stat -c %a "$d")" = "700" ]
+  rm -rf "$d"
+}
+
+@test "basic section installs oh-my-zsh by git clone, then its plugins" {
+  HOME="$BATS_TEST_TMPDIR/home"
+  mkdir -p "$HOME"
+  section basic.sh
+  recorded "git clone --depth 1 https://github.com/ohmyzsh/ohmyzsh.git $HOME/.oh-my-zsh"
+  recorded "zsh-autosuggestions"
+}
+
+@test "basic section: re-linking keeps the original backup" {
+  unset HAKPAK_DRY_RUN
+  HOME="$BATS_TEST_TMPDIR/home"
+  mkdir -p "$HOME"
+  echo original > "$HOME/.zshrc"
+  lib
+  eval "$(sed -n '/^_link_home_config()/,/^}/p' "$REPO/install/basic.sh")"
+  _link_home_config "$REPO/configs/zsh/.zshrc" "$HOME/.zshrc"
+  _link_home_config "$REPO/configs/zsh/.zshrc" "$HOME/.zshrc"
+  [ "$(cat "$HOME/.zshrc.bak")" = "original" ]
+  [ "$(readlink "$HOME/.zshrc")" = "$REPO/configs/zsh/.zshrc" ]
+}

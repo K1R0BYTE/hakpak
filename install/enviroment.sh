@@ -5,6 +5,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 # Python: system pip stays untouched (PEP 668); tools go through pipx or a venv.
 install_tool apt python "python3-pip python3-venv pipx virtualenv python3-requests python3-setuptools"
+step "pipx path" pipx ensurepath
 install_tool apt jython
 
 # Go from go.dev: distro packages are too old for current Go tools.
@@ -31,11 +32,19 @@ _install_go_toolchain() {
     log_ok "Go $version already installed"
     return 0
   fi
-  tarball="${TMPDIR:-/tmp}/hakpak-${version}.linux-${arch}.tar.gz"
+  # Download and unpack in a private temp dir first; only replace
+  # /usr/local/go once the new tree is complete.
+  local tmp rc
+  tmp="$(make_temp_dir)" || return 1
+  tarball="$tmp/${version}.linux-${arch}.tar.gz"
   run_step curl -fsSL -o "$tarball" "https://go.dev/dl/${version}.linux-${arch}.tar.gz" &&
+    run_step tar -C "$tmp" -xzf "$tarball" &&
     run_step sudo rm -rf /usr/local/go &&
-    run_step sudo tar -C /usr/local -xzf "$tarball" &&
-    run_step rm -f "$tarball"
+    run_step sudo mv "$tmp/go" /usr/local/go &&
+    run_step sudo chown -R root:root /usr/local/go
+  rc=$?
+  run_step rm -rf "$tmp"
+  return $rc
 }
 install_tool custom go _install_go_toolchain
 

@@ -37,6 +37,11 @@ case ":$PATH:" in
   *":$GOPATH/bin:"*) ;;
   *) PATH="$PATH:$GOPATH/bin" ;;
 esac
+# pipx puts tools here
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) PATH="$PATH:$HOME/.local/bin" ;;
+esac
 export PATH
 
 HAKPAK_FAILED=()
@@ -67,6 +72,29 @@ run_step() {
     return 0
   fi
   "$@"
+}
+
+# Run a step that isn't a tool install (config, service) and count a
+# failure in the summary: step <label> <command...>
+step() {
+  local label="$1"
+  shift
+  if run_step "$@"; then
+    return 0
+  fi
+  echo "failed: $label"
+  HAKPAK_FAILED+=("$label")
+  return 1
+}
+
+# A private temp dir (mode 700). In dry run, a placeholder path is returned
+# and nothing is created.
+make_temp_dir() {
+  if [ "${HAKPAK_DRY_RUN:-0}" = "1" ]; then
+    echo "${TMPDIR:-/tmp}/hakpak-dry-run"
+    return 0
+  fi
+  mktemp -d "${TMPDIR:-/tmp}/hakpak.XXXXXXXX"
 }
 
 has_command() {
@@ -124,12 +152,14 @@ _install_git() {
 
 _install_venv() {
   local name="$1" url="$2" dest="$HAKPAK_OPT/$1"
+  local done_marker="$dest/.venv/.hakpak-installed"
   _install_git "$name" "$url" "$dest" || return 1
-  if [ -d "$dest/.venv" ]; then
+  if [ -e "$done_marker" ]; then
     return 0
   fi
   run_step python3 -m venv "$dest/.venv" &&
-    run_step "$dest/.venv/bin/pip" install -r "$dest/requirements.txt"
+    run_step "$dest/.venv/bin/pip" install -r "$dest/requirements.txt" &&
+    run_step touch "$done_marker"
 }
 
 _install_url() {

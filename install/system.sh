@@ -4,11 +4,11 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 log 'Updating package lists'
-run_step sudo apt-get update
+step 'package lists' sudo apt-get update
 
 install_tool apt system-packages "build-essential net-tools bind9-dnsutils isc-dhcp-server nfs-common cifs-utils"
 
 log 'Giving your user ownership of /opt'
-run_step sudo chown -R "${USER}:${USER}" "$HAKPAK_OPT"
+step "/opt ownership" sudo chown -R "${USER}:${USER}" "$HAKPAK_OPT"
 
 install_summary
