@@ -199,7 +199,7 @@ section() {
 
 @test "pentest section installs nmap" {
   section pentest-soft.sh
-  recorded "apt-get install -y nmap"
+  grep -qE 'apt-get install -y .*\bnmap\b' "$HAKPAK_DRY_RUN_LOG"
 }
 
 @test "pentest section uses current sources for moved tools" {
@@ -304,7 +304,7 @@ section() {
 
 @test "mitm section installs the access point and interception tools" {
   section mitm.sh
-  for p in hostapd dnsmasq-base iptables tcpdump iw; do recorded "apt-get install -y $p"; done
+  recorded "apt-get install -y hostapd dnsmasq-base iptables tcpdump iw"
   recorded "pipx install mitmproxy"
 }
 

@@ -58,8 +58,10 @@ _install_oh_my_zsh() {
       run_step sudo chsh -s "$(command -v zsh || echo /usr/bin/zsh)" "$USER" ||
       return 1
   fi
-  _install_git zsh-syntax-highlighting https://github.com/zsh-users/zsh-syntax-highlighting.git "$plugins/zsh-syntax-highlighting" &&
-    _install_git zsh-autosuggestions https://github.com/zsh-users/zsh-autosuggestions "$plugins/zsh-autosuggestions"
+  # Each plugin is its own tool, so a failed clone is reported by its name.
+  install_tool git zsh-syntax-highlighting https://github.com/zsh-users/zsh-syntax-highlighting.git "$plugins/zsh-syntax-highlighting"
+  install_tool git zsh-autosuggestions https://github.com/zsh-users/zsh-autosuggestions "$plugins/zsh-autosuggestions"
+  return 0
 }
 
 # --- Surfing ---
