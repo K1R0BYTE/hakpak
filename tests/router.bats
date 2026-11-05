@@ -61,8 +61,8 @@ not_recorded() {
 @test "--ap gives the in interface an address and starts hostapd and dnsmasq" {
   router --ap
   [ "$status" -eq 0 ]
-  recorded "ip addr replace 10.0.0.1/24 dev wlan0"
-  recorded "hostapd -B -i wlan0 $REPO/configs/mitm/hostapd.conf"
+  recorded "ip addr add 10.0.0.1/24 dev wlan0"
+  recorded "hostapd -B -P /run/hakpak-hostapd.pid -i wlan0 $REPO/configs/mitm/hostapd.conf"
   recorded "dnsmasq -C $REPO/configs/mitm/dnsmasq.conf --interface=wlan0"
 }
 
@@ -72,13 +72,75 @@ not_recorded() {
   not_recorded "hostapd"
 }
 
-@test "--down removes the same rules it added and restores forwarding" {
-  router -i wlan1 -o eth1 -p 8443
+@test "--down removes the rules it added and restores forwarding" {
+  cat > "$HAKPAK_ROUTER_STATE" <<STATE
+IN=wlan1
+OUT=eth1
+PORTS=8443
+TO=127.0.0.1:8080
+TO_HOST=127.0.0.1
+TO_PORT=8080
+REDIRECT=1
+RULES_ADDED=1
+FORWARD_CHANGED=1
+OLD_FORWARD=0
+STATE
   router --down
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   recorded "iptables -t nat -D POSTROUTING -o eth1 -m comment --comment hakpak -j MASQUERADE"
   recorded "iptables -t nat -D PREROUTING -i wlan1 -p tcp --dport 8443 -m comment --comment hakpak -j REDIRECT --to-ports 8080"
-  recorded "sysctl -w net.ipv4.ip_forward="
+  recorded "sysctl -w net.ipv4.ip_forward=0"
+  not_recorded "ip addr del"
+  not_recorded "nmcli"
+}
+
+@test "dry run doesn't write the state file" {
+  router
+  [ ! -e "$HAKPAK_ROUTER_STATE" ]
+}
+
+@test "an option missing its value is an error, not a hang" {
+  run timeout 5 bash "$REPO/tools/setup-router" -i
+  [ "$status" -ne 0 ] && [ "$status" -ne 124 ]
+  [[ "$output" == *"needs a value"* ]]
+}
+
+@test "redirecting 443 blocks QUIC so browsers fall back to TCP" {
+  router
+  recorded "iptables -A FORWARD -i wlan0 -p udp --dport 443 -m comment --comment hakpak -j REJECT"
+}
+
+@test "QUIC isn't blocked when 443 isn't redirected" {
+  router -p 80
+  not_recorded "udp"
+}
+
+@test "a hostname target is rejected (DNAT needs an IP)" {
+  router -t proxybox:8080
+  [ "$status" -ne 0 ]
+}
+
+@test "an out-of-range target port is rejected" {
+  router -t 127.0.0.1:99999
+  [ "$status" -ne 0 ]
+}
+
+@test "a failing step undoes what was done and reports failure" {
+  unset HAKPAK_DRY_RUN
+  stubs="$BATS_TEST_TMPDIR/bin"; mkdir -p "$stubs"
+  calls="$BATS_TEST_TMPDIR/calls"
+  for c in sysctl ip nmcli hostapd dnsmasq kill; do
+    printf '#!/bin/sh\necho "%s $*" >> "%s"\n' "$c" "$calls" > "$stubs/$c"
+  done
+  # iptables: the first two rules work, the third fails
+  printf '#!/bin/sh\necho "iptables $*" >> "%s"\nn=$(grep -c "^iptables .* -A " "%s")\n[ "$n" -ge 3 ] && exit 1\nexit 0\n' "$calls" "$calls" > "$stubs/iptables"
+  chmod +x "$stubs"/*
+  PATH="$stubs:$PATH" _HAKPAK_EUID=0 run bash "$REPO/tools/setup-router" < /dev/null
+  [ "$status" -ne 0 ]
+  [[ "$output" != *"now go to"* ]]
+  grep -q "iptables -t nat -D POSTROUTING -o eth0" "$calls"
+  grep -q "sysctl -w net.ipv4.ip_forward=" "$calls"
+  [ ! -e "$HAKPAK_ROUTER_STATE" ]
 }
 
 @test "--down with nothing set up says so" {
