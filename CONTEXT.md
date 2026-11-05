@@ -6,11 +6,13 @@
 
 **Section**: one group of the Toolset, installed by one script in `install/`: System, Environment, Basic, Surfing, Web Tools, Pentest Tools, MiTM, Wordlists, WSL.
 
+**Setup**: `install/setup.sh [section...] [--dry-run]`. No sections installs all of them; named sections install only those, always in install order. `--dry-run` turns on the Dry run. A failing section doesn't stop the next.
+
 **Tool kind**: how a tool is installed. One of `apt`, `go`, `pipx`, `gem`, `git`, `venv`, `url`, `custom`. Every tool goes through `install_tool <kind> <name> …` in `install/lib.sh`. A `custom` tool names a function in `install/custom.sh`.
 
 **Install module**: `install/lib.sh`. Knows how to install each tool kind, skips tools that are already present, keeps going when one tool fails, and prints the failed tools at the end.
 
-**Dry run**: `HAKPAK_DRY_RUN=1` makes the install module record every command instead of running it (to `HAKPAK_DRY_RUN_LOG`, or stdout). Tests and CI use it; nothing is installed.
+**Dry run**: `setup.sh --dry-run` (or `HAKPAK_DRY_RUN=1`) makes the install module record every command instead of running it (to `HAKPAK_DRY_RUN_LOG`, or stdout). Tests and CI use it; nothing is installed.
 
 **Config**: a dotfile or system file kept in `configs/` and put in place on install by `link_config`: symlinked in your home, copied under `/etc`. A real file it replaces is backed up once to `<file>.bak`; re-runs are no-ops.
 
