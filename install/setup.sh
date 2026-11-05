@@ -19,6 +19,8 @@ section_script() {
     surfing) echo surfing.sh ;;
     web) echo web-soft.sh ;;
     pentest) echo pentest-soft.sh ;;
+    cloud) echo cloud.sh ;;
+    cicd) echo cicd.sh ;;
     mitm) echo mitm.sh ;;
     wordlists) echo wordlists.sh ;;
     wsl) echo wsl.sh ;;
