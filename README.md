@@ -32,6 +32,8 @@ You can clone it anywhere; the scripts find the repo from their own path.
 
 If a tool fails to install, the rest keep going and each section lists what failed at the end.
 
+Re-running a section is safe. Your own dotfiles (`.zshrc`, `.tmux.conf`, `.dircolors`) are moved to `<file>.bak` once and replaced with links into `configs/`, so later runs change nothing. Configs under `/etc` (like `/etc/wsl.conf`) are copied, not linked, because root services read them. The curated `.zsh_history` is merged into your own history instead of linked, so Ctrl+R finds those commands and what you type stays local.
+
 To see what a section would do without changing anything:
 
 ```
@@ -150,8 +152,10 @@ Run it without `-i`/`-o` to pick the interfaces from a list. When 443 is redirec
 ## WSL (apt+configs)
 
 * xfce4
-* xrdp
+* xrdp (remote desktop on port 3390)
 * dbus-x11
+
+`/etc/wsl.conf` turns on systemd and turns off Windows drive automount and interop. Run `wsl --shutdown` from Windows once after the install, then reopen WSL: xrdp then starts with systemd. `startrdp` and `stoprdp` start and stop it by hand.
 
 # Tests
 
