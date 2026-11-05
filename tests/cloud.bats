@@ -306,3 +306,10 @@ GCLOUD_LINE='deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packag
   [ "$status" -eq 0 ]
   [ "$output" = "v3.90.1" ]
 }
+
+@test "the AWS CLI install makes sure gpg and gpgv are there before checking the signature" {
+  lib
+  has_command() { case "$1" in gpg|gpgv) return 1 ;; *) command -v "$1" >/dev/null ;; esac; }
+  install_tool custom aws _install_aws_cli
+  recorded "apt-get install -y gnupg gpgv"
+}

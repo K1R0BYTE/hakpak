@@ -163,6 +163,16 @@ _github_latest_tag() {
   echo "$tag"
 }
 
+# CPU name in release asset names (amd64, arm64); other CPUs have no build.
+_release_arch() {
+  local arch
+  arch="$(_go_arch)"
+  case "$arch" in
+    amd64|arm64) echo "$arch" ;;
+    *) echo "$1 has no build for $(uname -m)" >&2; return 1 ;;
+  esac
+}
+
 # Download one release asset and its checksum manifest, check the asset,
 # and install the binary as /usr/local/bin/<name>. A .tar.gz asset is
 # unpacked first and its <name> file installed:
@@ -204,8 +214,8 @@ _install_aws_cli() {
   if ! has_command unzip; then
     apt_install unzip || return 1
   fi
-  if ! has_command gpgv; then
-    apt_install gpgv || return 1
+  if ! has_command gpg || ! has_command gpgv; then
+    apt_install gnupg gpgv || return 1
   fi
   url="https://awscli.amazonaws.com/awscli-exe-linux-$arch.zip"
   tmp="$(make_temp_dir)" || return 1
@@ -292,10 +302,7 @@ _install_kubescape() {
     log_ok "kubescape already installed"
     return 0
   fi
-  case "$(_go_arch)" in
-    amd64|arm64) arch="$(_go_arch)" ;;
-    *) echo "kubescape has no build for $(uname -m)"; return 1 ;;
-  esac
+  arch="$(_release_arch kubescape)" || return 1
   tag="$(_github_latest_tag kubescape/kubescape)" || return 1
   _install_release_binary kubescape \
     "https://github.com/kubescape/kubescape/releases/download/$tag" \
@@ -312,10 +319,7 @@ _install_trufflehog() {
     log_ok "trufflehog already installed"
     return 0
   fi
-  case "$(_go_arch)" in
-    amd64|arm64) arch="$(_go_arch)" ;;
-    *) echo "trufflehog has no build for $(uname -m)"; return 1 ;;
-  esac
+  arch="$(_release_arch trufflehog)" || return 1
   tag="$(_github_latest_tag trufflesecurity/trufflehog)" || return 1
   _install_release_binary trufflehog \
     "https://github.com/trufflesecurity/trufflehog/releases/download/$tag" \
