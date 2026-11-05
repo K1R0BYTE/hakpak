@@ -193,7 +193,7 @@ STATE
   grep -q "setup-router=" "$REPO/system/.alias"
 }
 
-@test "sample AP is WPA2 with the hacktheplanet password, on settings most adapters support" {
+@test "sample AP is WPA2 with the hacktheplanet password, on 802.11n settings most adapters support" {
   c="$REPO/configs/mitm/hostapd.conf"
   grep -qx 'wpa=2' "$c"
   grep -qx 'wpa_key_mgmt=WPA-PSK' "$c"
@@ -201,7 +201,10 @@ STATE
   grep -qx 'wpa_passphrase=hacktheplanet' "$c"
   grep -qx 'hw_mode=g' "$c"
   grep -qx 'channel=6' "$c"
-  ! grep -qE '^(ieee80211n|ieee80211ac|ieee80211ax)=1' "$c"
+  grep -qx 'ieee80211n=1' "$c"
+  grep -qx 'wmm_enabled=1' "$c"
+  ! grep -q '^ht_capab=' "$c"
+  ! grep -qE '^(ieee80211ac|ieee80211ax)=1' "$c"
   ! grep -q '^wpa_key_mgmt=.*SAE' "$c"
 }
 
