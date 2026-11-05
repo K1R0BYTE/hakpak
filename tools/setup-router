@@ -153,7 +153,20 @@ delete_rules() {
   done < <(rules -D)
 }
 
+# Fail early, with a useful message, if the card can't run an access point.
+check_ap_mode() {
+  [ "${HAKPAK_DRY_RUN:-0}" = "1" ] && return 0
+  has_command iw || return 0
+  local phy
+  phy="$(iw dev "$IN" info 2>/dev/null | awk '/wiphy/ {print "phy" $2}')"
+  [ -n "$phy" ] || die "$IN is not a Wi-Fi interface (check with: iw dev)"
+  if ! iw phy "$phy" info | sed -n '/Supported interface modes/,/^[^[:space:]]/p' | grep -q '\* AP$'; then
+    die "$IN's driver doesn't support AP mode, so it can't run an access point. Use an adapter whose driver lists AP under 'Supported interface modes' in: iw phy $phy info"
+  fi
+}
+
 start_ap() {
+  check_ap_mode
   if has_command nmcli && [ "$(nmcli -g GENERAL.STATE device show "$IN" 2>/dev/null)" != "10 (unmanaged)" ]; then
     must nmcli device set "$IN" managed no
     NM_RELEASED=1
