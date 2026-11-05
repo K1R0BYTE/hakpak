@@ -124,6 +124,21 @@ HAKPAK_DRY_RUN=1 bash web-soft.sh
 * tcpdump (apt)
 * mitmproxy (pipx)
 
+Sample configs live in `configs/mitm/`: `hostapd.conf` (an open Wi-Fi network called `hakpak`, with WPA2 lines to uncomment) and `dnsmasq.conf` (DHCP and DNS for clients on 10.0.0.0/24).
+
+`setup-router` turns the machine into a router: it NATs clients on the in interface out through the out interface, turns on IP forwarding, and redirects chosen TCP ports to your proxy.
+
+```
+setup-router --ap                    # Wi-Fi AP on wlan0, internet via eth0, 80/443 -> localhost:8080
+setup-router -i eth1 -o wlan0 -p 80  # wired clients on eth1, only HTTP redirected
+setup-router -t 192.168.1.50:8080    # send traffic to a proxy on another machine
+setup-router --no-redirect           # plain router, no interception
+setup-router --down                  # remove everything it added
+mitmproxy --mode transparent --showhost
+```
+
+Run it without `-i`/`-o` to pick the interfaces from a list. `setup-router --help` shows every option.
+
 ## Wordlists (git)
 
 * seclists (git)
@@ -139,5 +154,5 @@ HAKPAK_DRY_RUN=1 bash web-soft.sh
 
 ```
 bats tests
-shellcheck -x install/*.sh
+shellcheck -x install/*.sh tools/setup-router
 ```

@@ -1,0 +1,186 @@
+#!/usr/bin/env bash
+# setup-router: turn this machine into a router for MiTM work.
+#
+# Clients connect on the "in" interface (Wi-Fi AP or a wired port), their
+# traffic is NATed out through the "out" interface, and chosen TCP ports are
+# redirected to an intercepting proxy (mitmproxy on localhost:8080 by default).
+#
+# Every rule is tagged "hakpak" and saved to a state file, so --down removes
+# exactly what was added.
+
+set -u
+
+# shellcheck source=install/lib.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../install/lib.sh"
+
+STATE="${HAKPAK_ROUTER_STATE:-/run/hakpak-router.env}"
+TAG=(-m comment --comment hakpak)
+
+usage() {
+  cat <<'EOF'
+Usage: setup-router [options]
+
+  -i, --in IFACE       interface clients connect to (default: wlan0)
+  -o, --out IFACE      interface with internet access (default: eth0)
+  -p, --ports LIST     TCP ports to redirect, comma-separated (default: 80,443)
+  -t, --to HOST:PORT   where to redirect them (default: 127.0.0.1:8080)
+      --no-redirect    NAT and forwarding only, no port redirects
+      --ap             also run an access point on the in interface: give it
+                       --address, start hostapd and dnsmasq with the sample
+                       configs in configs/mitm/
+  -a, --address CIDR   address for the in interface with --ap (default: 10.0.0.1/24)
+  -d, --down           remove the rules, stop the AP, restore forwarding
+  -h, --help           show this help
+
+Run with no -i/-o in a terminal to pick interfaces from a list.
+
+Examples:
+  setup-router --ap                          Wi-Fi AP on wlan0, out via eth0
+  setup-router -i eth1 -o wlan0 -p 80        wired clients on eth1, HTTP only
+  setup-router -t 192.168.1.50:8080          send traffic to a proxy elsewhere
+  setup-router --down
+
+Then run the proxy in transparent mode, e.g.:
+  mitmproxy --mode transparent --showhost
+EOF
+}
+
+die() {
+  echo "setup-router: $1" >&2
+  exit 1
+}
+
+# Pick an interface from a list when running interactively.
+choose_iface() {
+  local prompt="$1" default="$2" reply
+  if [ ! -t 0 ]; then
+    echo "$default"
+    return
+  fi
+  echo "Interfaces:" >&2
+  ip -br link 2>/dev/null | awk '$1 != "lo" {print "  " $1 "  " $2}' >&2
+  read -r -p "$prompt [$default]: " reply
+  echo "${reply:-$default}"
+}
+
+valid_ports() {
+  local p
+  IFS=',' read -r -a _ports <<< "$1"
+  [ "${#_ports[@]}" -gt 0 ] || return 1
+  for p in "${_ports[@]}"; do
+    [[ "$p" =~ ^[0-9]+$ ]] && [ "$p" -ge 1 ] && [ "$p" -le 65535 ] || return 1
+  done
+}
+
+# All rules for a given action (-A to add, -D to delete), one per line.
+apply_rules() {
+  local action="$1" port to_host to_port
+  run_step iptables -t nat "$action" POSTROUTING -o "$OUT" "${TAG[@]}" -j MASQUERADE
+  run_step iptables "$action" FORWARD -i "$IN" -o "$OUT" "${TAG[@]}" -j ACCEPT
+  run_step iptables "$action" FORWARD -i "$OUT" -o "$IN" -m conntrack --ctstate RELATED,ESTABLISHED "${TAG[@]}" -j ACCEPT
+
+  [ "$REDIRECT" = "1" ] || return 0
+  to_host="${TO%:*}"
+  to_port="${TO##*:}"
+  IFS=',' read -r -a _ports <<< "$PORTS"
+  for port in "${_ports[@]}"; do
+    if [ "$to_host" = "127.0.0.1" ] || [ "$to_host" = "localhost" ]; then
+      # REDIRECT sends it to this machine on the in interface's address.
+      run_step iptables -t nat "$action" PREROUTING -i "$IN" -p tcp --dport "$port" "${TAG[@]}" -j REDIRECT --to-ports "$to_port"
+    else
+      run_step iptables -t nat "$action" PREROUTING -i "$IN" -p tcp --dport "$port" "${TAG[@]}" -j DNAT --to-destination "$TO"
+    fi
+  done
+}
+
+start_ap() {
+  if has_command nmcli; then
+    run_step nmcli device set "$IN" managed no
+  fi
+  run_step ip link set "$IN" up
+  run_step ip addr replace "$ADDRESS" dev "$IN"
+  run_step hostapd -B -i "$IN" "$HAKPAK_ROOT/configs/mitm/hostapd.conf"
+  run_step dnsmasq -C "$HAKPAK_ROOT/configs/mitm/dnsmasq.conf" --interface="$IN" --pid-file=/run/hakpak-dnsmasq.pid
+}
+
+stop_ap() {
+  run_step pkill -f "hostapd -B -i $IN"
+  if [ -f /run/hakpak-dnsmasq.pid ]; then
+    run_step kill "$(cat /run/hakpak-dnsmasq.pid)"
+  fi
+  run_step ip addr del "$ADDRESS" dev "$IN"
+  if has_command nmcli; then
+    run_step nmcli device set "$IN" managed yes
+  fi
+}
+
+save_state() {
+  local old_forward
+  old_forward="$(cat /proc/sys/net/ipv4/ip_forward 2>/dev/null || echo 0)"
+  if ! printf 'IN=%q\nOUT=%q\nPORTS=%q\nTO=%q\nREDIRECT=%q\nAP=%q\nADDRESS=%q\nOLD_FORWARD=%q\n' \
+      "$IN" "$OUT" "$PORTS" "$TO" "$REDIRECT" "$AP" "$ADDRESS" "$old_forward" > "$STATE" 2>/dev/null; then
+    [ "${HAKPAK_DRY_RUN:-0}" = "1" ] || die "can't write $STATE"
+    echo "would save state to $STATE"
+  fi
+}
+
+# --- arguments ---
+
+IN="" OUT="" PORTS="80,443" TO="127.0.0.1:8080" REDIRECT=1 AP=0 ADDRESS="10.0.0.1/24" DOWN=0
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -i|--in) IN="${2:-}"; shift 2 ;;
+    -o|--out) OUT="${2:-}"; shift 2 ;;
+    -p|--ports) PORTS="${2:-}"; shift 2 ;;
+    -t|--to) TO="${2:-}"; shift 2 ;;
+    -a|--address) ADDRESS="${2:-}"; shift 2 ;;
+    --no-redirect) REDIRECT=0; shift ;;
+    --ap) AP=1; shift ;;
+    -d|--down) DOWN=1; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) usage >&2; die "unknown option: $1" ;;
+  esac
+done
+
+if [ "${HAKPAK_DRY_RUN:-0}" != "1" ] && [ "$EUID" -ne 0 ]; then
+  die "needs root: run it with sudo (the setup-router alias does this)"
+fi
+
+# --- down ---
+
+if [ "$DOWN" = "1" ]; then
+  [ -f "$STATE" ] || die "No router set up by hakpak (no $STATE)."
+  # shellcheck source=/dev/null
+  source "$STATE"
+  log "Removing router rules for $IN -> $OUT"
+  apply_rules -D
+  [ "$AP" = "1" ] && stop_ap
+  run_step sysctl -w "net.ipv4.ip_forward=${OLD_FORWARD:-0}"
+  run_step rm -f "$STATE"
+  log_ok "Router removed"
+  exit 0
+fi
+
+# --- up ---
+
+[ -n "$IN" ] || IN="$(choose_iface "Interface clients connect to (in)" wlan0)"
+[ -n "$OUT" ] || OUT="$(choose_iface "Interface with internet (out)" eth0)"
+[ "$IN" != "$OUT" ] || die "in and out interfaces must differ (both are $IN)"
+valid_ports "$PORTS" || die "bad port list: $PORTS (use numbers like 80,443)"
+[[ "$TO" =~ ^[A-Za-z0-9.-]+:[0-9]+$ ]] || die "bad target: $TO (use HOST:PORT, e.g. 127.0.0.1:8080)"
+[ -f "$STATE" ] && die "A hakpak router is already set up. Run setup-router --down first."
+
+log "Router: clients on $IN, internet via $OUT"
+save_state
+[ "$AP" = "1" ] && start_ap
+run_step sysctl -w net.ipv4.ip_forward=1
+apply_rules -A
+
+if [ "$REDIRECT" = "1" ]; then
+  log_ok "TCP ports $PORTS from $IN now go to $TO"
+  echo "Start your proxy, e.g.: mitmproxy --mode transparent --showhost"
+else
+  log_ok "NAT and forwarding on, no redirects"
+fi
+echo "Undo with: setup-router --down"
