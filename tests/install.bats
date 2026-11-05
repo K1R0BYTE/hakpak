@@ -354,17 +354,13 @@ section() {
   not_recorded "chown -R"
 }
 
-@test "wsl section sets up dnsmasq for DHCP instead of isc-dhcp-server" {
+@test "wsl section leaves DNS and DHCP to WSL itself" {
   section wsl.sh
-  recorded "apt-get install -y dnsmasq"
-  recorded "install -m 644 $REPO/configs/dnsmasq.conf /etc/dnsmasq.d/hakpak.conf"
-  not_recorded "dhcpd.conf"
-}
-
-@test "dnsmasq config is DHCP only, so it doesn't take port 53" {
-  grep -qx 'port=0' "$REPO/configs/dnsmasq.conf"
-  grep -q '^dhcp-range=172.21.48.10,172.21.48.20' "$REPO/configs/dnsmasq.conf"
+  not_recorded "dnsmasq"
+  not_recorded "dhcp"
+  [ ! -e "$REPO/configs/dnsmasq.conf" ]
   [ ! -e "$REPO/configs/dhcpd.conf" ]
+  ! grep -q 'dhcp' "$REPO/system/.alias"
 }
 
 @test "wsl section lets xrdp read its TLS key" {
