@@ -2,9 +2,11 @@
 # hakpak install module. Source it from a section script:
 #
 #   source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
-#   install_tool apt  nmap
-#   install_tool go   ffuf github.com/ffuf/ffuf/v2@latest
+#   install_section web        # every `web` row of install/toolset.txt
 #   install_summary
+#
+# install_section calls `install_tool <kind> <name> [source...]` per row;
+# you can also call install_tool directly.
 #
 # Tool kinds (see CONTEXT.md):
 #   apt    <name> [packages]          apt-get install (packages default to name)
@@ -14,7 +16,7 @@
 #   git    <name> <url> [dest]        shallow clone to dest, default $HAKPAK_OPT/<name>
 #   venv   <name> <url>               git clone + .venv + pip install -r requirements.txt
 #   url    <name> <url> <dest>        download one file (skips if dest exists)
-#   custom <name> <function>          call a function that uses `run_step` for its commands
+#   custom <name> <function>          call a function (install/custom.sh) that uses `run_step`
 #
 # One failing tool doesn't stop the section; install_summary lists the
 # failures and returns non-zero.
@@ -383,6 +385,12 @@ install_tool() {
   HAKPAK_FAILED+=("$name")
   return 1
 }
+
+# The Toolset manifest (install_section) and the custom install steps.
+# shellcheck source=install/toolset.sh
+source "$HAKPAK_ROOT/install/toolset.sh"
+# shellcheck source=install/custom.sh
+source "$HAKPAK_ROOT/install/custom.sh"
 
 install_summary() {
   if [ "${#HAKPAK_FAILED[@]}" -eq 0 ]; then

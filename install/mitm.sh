@@ -1,17 +1,10 @@
 #!/usr/bin/env bash
 # MiTM section: rogue access point and traffic interception.
+# Tools are listed in install/toolset.txt.
 # shellcheck source=install/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 require_normal_user
 
-# hostapd: Wi-Fi access point
-# dnsmasq-base: DHCP + DNS for the access point's clients. The -base package
-#   has no system service, so it doesn't fight systemd-resolved for port 53;
-#   you start it yourself when you need it.
-# iptables: NAT and redirect rules
-# tcpdump: packet capture
-# iw: checks the Wi-Fi card supports AP mode
-install_tool apt mitm-packages "hostapd dnsmasq-base iptables tcpdump iw"
-install_tool pipx mitmproxy
+install_section mitm
 
 install_summary
