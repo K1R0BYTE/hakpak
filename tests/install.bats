@@ -317,7 +317,7 @@ section() {
 
 @test "mitm section installs the access point and interception tools" {
   section mitm.sh
-  recorded "apt-get install -y hostapd dnsmasq-base iptables tcpdump"
+  recorded "apt-get install -y hostapd dnsmasq-base iptables tcpdump iw"
   recorded "pipx install mitmproxy"
 }
 

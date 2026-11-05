@@ -124,7 +124,11 @@ HAKPAK_DRY_RUN=1 bash web-soft.sh
 * tcpdump (apt)
 * mitmproxy (pipx)
 
-Sample configs live in `configs/mitm/`: `hostapd.conf` (an open Wi-Fi network called `hakpak`, with WPA2 lines to uncomment) and `dnsmasq.conf` (DHCP and DNS for clients on 10.0.0.0/24).
+Sample configs live in `configs/mitm/`:
+- `hostapd.conf`: a WPA2 network called `hakpak`, password `hacktheplanet`. It uses 2.4 GHz 802.11g on channel 6 so nearly any adapter and client works.
+- `dnsmasq.conf`: DHCP and DNS for clients on 10.0.0.0/24.
+
+No extra drivers are needed for hostapd: it talks to the kernel's standard Wi-Fi interface (nl80211). Your adapter's driver must support AP mode, and `setup-router --ap` checks that first. Adapters with in-kernel drivers that do: Atheros AR9271, Ralink RT3070/RT5370, MediaTek MT7610U/MT7612U. Most Realtek ones (RTL8812AU and others) need out-of-tree drivers. WSL has no Wi-Fi access, so run the AP on real Linux or a VM with the USB adapter passed through.
 
 `setup-router` turns the machine into a router: it NATs clients on the in interface out through the out interface, turns on IP forwarding, and redirects chosen TCP ports to your proxy.
 

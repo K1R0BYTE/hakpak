@@ -192,3 +192,41 @@ STATE
 @test "setup-router alias exists" {
   grep -q "setup-router=" "$REPO/system/.alias"
 }
+
+@test "sample AP is WPA2 with the hacktheplanet password, on settings most adapters support" {
+  c="$REPO/configs/mitm/hostapd.conf"
+  grep -qx 'wpa=2' "$c"
+  grep -qx 'wpa_key_mgmt=WPA-PSK' "$c"
+  grep -qx 'rsn_pairwise=CCMP' "$c"
+  grep -qx 'wpa_passphrase=hacktheplanet' "$c"
+  grep -qx 'hw_mode=g' "$c"
+  grep -qx 'channel=6' "$c"
+  ! grep -qE '^(ieee80211n|ieee80211ac|ieee80211ax)=1' "$c"
+  ! grep -q '^wpa_key_mgmt=.*SAE' "$c"
+}
+
+@test "--ap stops early with a clear message when the card can't do AP mode" {
+  unset HAKPAK_DRY_RUN
+  stubs="$BATS_TEST_TMPDIR/bin"; mkdir -p "$stubs"
+  calls="$BATS_TEST_TMPDIR/calls"
+  for c in sysctl ip nmcli hostapd dnsmasq iptables; do
+    printf '#!/bin/sh\necho "%s $*" >> "%s"\n' "$c" "$calls" > "$stubs/$c"
+  done
+  cat > "$stubs/iw" <<'IW'
+#!/bin/sh
+case "$*" in
+  "dev wlan0 info") echo "Interface wlan0"; echo "	wiphy 0" ;;
+  "phy phy0 info") printf 'Supported interface modes:\n\t * managed\n\t * monitor\nBand 1:\n' ;;
+esac
+IW
+  chmod +x "$stubs"/*
+  PATH="$stubs:$PATH" _HAKPAK_EUID=0 run bash "$REPO/tools/setup-router" --ap < /dev/null
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"AP mode"* ]]
+  ! grep -q "^hostapd" "$calls" 2>/dev/null
+}
+
+@test "mitm section installs iw for the AP check" {
+  run bash "$REPO/install/mitm.sh"
+  grep -qF "hostapd dnsmasq-base iptables tcpdump iw" "$HAKPAK_DRY_RUN_LOG"
+}

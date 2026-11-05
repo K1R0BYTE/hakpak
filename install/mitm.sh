@@ -10,7 +10,8 @@ require_normal_user
 #   you start it yourself when you need it.
 # iptables: NAT and redirect rules
 # tcpdump: packet capture
-install_tool apt mitm-packages "hostapd dnsmasq-base iptables tcpdump"
+# iw: checks the Wi-Fi card supports AP mode
+install_tool apt mitm-packages "hostapd dnsmasq-base iptables tcpdump iw"
 install_tool pipx mitmproxy
 
 install_summary
