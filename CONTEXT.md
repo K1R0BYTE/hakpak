@@ -1,10 +1,12 @@
 # hakpak domain
 
-**Toolset**: the full set of tools hakpak installs, grouped into sections.
+**Toolset**: the full set of tools hakpak installs, grouped into sections. Listed once, one row per tool, in the manifest `install/toolset.txt`.
+
+**Toolset manifest**: `install/toolset.txt`. Each row is `section kind name [source...]`, with an optional `# note` for the README. Section scripts install their rows with `install_section <id>`, and `tools/gen-readme` writes the README tool list from it.
 
 **Section**: one group of the Toolset, installed by one script in `install/`: System, Environment, Basic, Surfing, Web Tools, Pentest Tools, MiTM, Wordlists, WSL.
 
-**Tool kind**: how a tool is installed. One of `apt`, `go`, `pipx`, `gem`, `git`, `venv`, `url`, `custom`. Every tool in a section script goes through `install_tool <kind> <name> …` in `install/lib.sh`.
+**Tool kind**: how a tool is installed. One of `apt`, `go`, `pipx`, `gem`, `git`, `venv`, `url`, `custom`. Every tool goes through `install_tool <kind> <name> …` in `install/lib.sh`. A `custom` tool names a function in `install/custom.sh`.
 
 **Install module**: `install/lib.sh`. Knows how to install each tool kind, skips tools that are already present, keeps going when one tool fails, and prints the failed tools at the end.
 

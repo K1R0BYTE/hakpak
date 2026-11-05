@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# Generate the README tool list from the Toolset manifest (install/toolset.txt).
+#
+#   tools/gen-readme           rewrite the list between the toolset markers in README.md
+#   tools/gen-readme --check   exit 1 if README.md is out of date (CI runs this)
+#   tools/gen-readme --print   print the generated list
+#
+# HAKPAK_TOOLSET and HAKPAK_README point it at other files (tests use this).
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+README="${HAKPAK_README:-$ROOT/README.md}"
+START='<!-- toolset:start -->'
+END='<!-- toolset:end -->'
+
+# shellcheck source=install/toolset.sh
+source "$ROOT/install/toolset.sh"
+
+render() {
+  local s id title rows first=1 kind name note
+  for s in "${HAKPAK_SECTIONS[@]}"; do
+    id="${s%%:*}"
+    title="${s#*:}"
+    rows="$(_toolset_select "$id")"
+    [ -n "$rows" ] || continue
+    [ "$first" -eq 1 ] || echo
+    first=0
+    printf '## %s\n\n' "$title"
+    while IFS="$_TS" read -r _ _ kind name _ note; do
+      if [ "$kind" = custom ]; then
+        printf '* %s' "$name"
+      else
+        printf '* %s (%s)' "$name" "$kind"
+      fi
+      if [ -n "$note" ]; then
+        printf ': %s' "$note"
+      fi
+      echo
+    done <<< "$rows"
+  done
+}
+
+# README.md with the text between the markers replaced by the file in $1.
+spliced() {
+  local list="$1"
+  if ! grep -qxF "$START" "$README" || ! grep -qxF "$END" "$README"; then
+    echo "gen-readme: $README needs the lines $START and $END" >&2
+    return 1
+  fi
+  awk -v start="$START" -v end="$END" -v list="$list" '
+    $0 == start { print; while ((getline line < list) > 0) print line; skip = 1; next }
+    $0 == end { skip = 0 }
+    !skip { print }
+  ' "$README"
+}
+
+mode="${1:-write}"
+list="$(mktemp)"
+out="$(mktemp)"
+trap 'rm -f "$list" "$out"' EXIT
+render > "$list"
+
+case "$mode" in
+  --print) cat "$list" ;;
+  --check)
+    spliced "$list" > "$out"
+    if ! cmp -s "$out" "$README"; then
+      echo "README.md tool list is out of date; run tools/gen-readme"
+      diff -u "$README" "$out" || true
+      exit 1
+    fi
+    ;;
+  write)
+    spliced "$list" > "$out"
+    cat "$out" > "$README"
+    ;;
+  *)
+    echo "usage: tools/gen-readme [--check|--print]" >&2
+    exit 2
+    ;;
+esac

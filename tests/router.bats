@@ -231,5 +231,5 @@ IW
 
 @test "mitm section installs iw for the AP check" {
   run bash "$REPO/install/mitm.sh"
-  grep -qF "hostapd dnsmasq-base iptables tcpdump iw" "$HAKPAK_DRY_RUN_LOG"
+  grep -qE 'apt-get install -y .*\biw$' "$HAKPAK_DRY_RUN_LOG"
 }
