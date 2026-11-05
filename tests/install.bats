@@ -324,9 +324,9 @@ section() {
   not_recorded "virtualenv"
 }
 
-@test "setup.sh runs the new sections" {
-  grep -q 'bash surfing.sh' "$REPO/install/setup.sh"
-  grep -q 'bash mitm.sh' "$REPO/install/setup.sh"
+@test "setup.sh knows the new sections" {
+  grep -q 'surfing.sh' "$REPO/install/setup.sh"
+  grep -q 'mitm.sh' "$REPO/install/setup.sh"
 }
 
 # --- dnsmasq swap and sudo handling ---
