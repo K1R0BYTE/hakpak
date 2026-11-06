@@ -210,7 +210,7 @@ section() {
 }
 
 @test "every section script runs cleanly in dry run" {
-  for s in system.sh enviroment.sh basic.sh surfing.sh web-soft.sh pentest-soft.sh cloud.sh cicd.sh mitm.sh wordlists.sh rdp.sh; do
+  for s in system.sh enviroment.sh basic.sh surfing.sh web-soft.sh pentest-soft.sh cloud.sh cicd.sh mitm.sh wordlists.sh rdp.sh wsl.sh; do
     : > "$HAKPAK_DRY_RUN_LOG"
     section "$s"
     [ "$status" -eq 0 ] || { echo "$s failed: $output"; return 1; }
@@ -248,12 +248,12 @@ section() {
 
 @test "section scripts don't call apt, go, pip or git directly" {
   run grep -nE '^\s*(sudo )?(apt|apt-get|go|pip3?|git) ' \
-    "$REPO"/install/{system,enviroment,basic,surfing,web-soft,pentest-soft,cloud,cicd,mitm,wordlists,rdp}.sh
+    "$REPO"/install/{system,enviroment,basic,surfing,web-soft,pentest-soft,cloud,cicd,mitm,wordlists,rdp,wsl}.sh
   [ "$status" -ne 0 ] || { echo "$output"; return 1; }
 }
 
 @test "section scripts don't define their own logger" {
-  run grep -n 'colorecho()' "$REPO"/install/{system,enviroment,basic,surfing,web-soft,pentest-soft,cloud,cicd,mitm,wordlists,rdp}.sh
+  run grep -n 'colorecho()' "$REPO"/install/{system,enviroment,basic,surfing,web-soft,pentest-soft,cloud,cicd,mitm,wordlists,rdp,wsl}.sh
   [ "$status" -ne 0 ]
 }
 

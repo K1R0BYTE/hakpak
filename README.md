@@ -24,20 +24,17 @@ git clone https://github.com/K1R0BYTE/hakpak.git ${HOME}/.hakpak && cd ${HOME}/.
 bash setup.sh
 ```
 
-With no arguments `setup.sh` opens a menu: move with the arrow keys (or j/k), tick sections with space (`a` ticks all), press Enter to install the ticked ones, or q to quit. The menu needs a terminal; in scripts and CI, name the sections or pass `all`. You can also name sections to install only those, in install order, or pass `all`; `--dry-run` prints what would run and changes nothing:
+With no arguments `setup.sh` opens a menu that lists each section with the tools it installs: move with the arrow keys (or j/k), tick sections with space (`a` ticks all), press Enter to install the ticked ones, or q to quit. The menu needs a terminal; in scripts and CI, name the sections or pass `all`. You can also name sections to install only those, in install order, or pass `all`; `--dry-run` prints what would run and changes nothing:
 
 ```
 bash setup.sh                        # menu: tick the sections to install
 bash setup.sh web pentest            # only Web Tools and Pentest Tools
 bash setup.sh all                    # every section
 bash setup.sh --dry-run all          # everything, without installing
-bash setup.sh --no-wsl-conf web      # on WSL, keep your /etc/wsl.conf
 bash setup.sh --help                 # the section names
 ```
 
-Sections: `system`, `environment`, `basic`, `surfing`, `web`, `pentest`, `cloud`, `cicd`, `mitm`, `wordlists`, `rdp`. If one fails, the rest still run and `setup.sh` lists the failed sections at the end.
-
-On WSL (any distro), `setup.sh` also puts `configs/wsl.conf` in `/etc/wsl.conf` before the sections, whichever ones you pick. An existing `/etc/wsl.conf` is backed up first, to `/etc/wsl.conf.bak` (or `/etc/wsl.conf.bak.<timestamp>` if that is taken). It turns on systemd and turns off Windows drive automount and interop, so `/mnt/c` and running Windows programs from WSL stop working. Run `wsl --shutdown` from Windows once after the install and reopen WSL to apply it. Pass `--no-wsl-conf` to keep your own `/etc/wsl.conf`. Outside WSL nothing changes.
+Sections: `system`, `environment`, `basic`, `surfing`, `web`, `pentest`, `cloud`, `cicd`, `mitm`, `wordlists`, `rdp`, `wsl`. If one fails, the rest still run and `setup.sh` lists the failed sections at the end.
 
 Run `setup.sh` as your normal user, not with sudo. Your user needs sudo rights; the scripts ask for your password only for the steps that need root (apt packages, `/usr/local`, `/etc`). Everything else installs as you: Go tools into `/opt/go`, pipx tools into `~/.local/bin`, and git tools into `/opt/<tool>`, owned by you.
 
@@ -191,7 +188,7 @@ Run it without `-i`/`-o` to pick the interfaces from a list. When 443 is redirec
 
 # RDP
 
-`setup.sh` installs `/etc/wsl.conf` on WSL whatever sections you pick, and the `rdp` section installs it too when run on its own (on WSL only). It turns on systemd and turns off Windows drive automount and interop. Run `wsl --shutdown` from Windows once after the install, then reopen WSL: xrdp then starts with systemd. `startrdp` and `stoprdp` start and stop it by hand.
+The `wsl` section installs only `/etc/wsl.conf`, and the menu ticks it by default on WSL (outside WSL it does nothing). hakpak's `wsl.conf` turns on systemd and turns off Windows drive automount (`/mnt/c`) and interop (running `.exe` files). If you already have a different `/etc/wsl.conf`, setup shows the difference, recommends one, and asks which to keep (`k` or `h`; Enter takes the recommendation). Replacing yours backs it up to `/etc/wsl.conf.bak`, an identical file is never rewritten, and without a terminal yours is kept: set `HAKPAK_WSL_CONF=keep` or `replace` to decide up front. Run `wsl --shutdown` from Windows once after the install, then reopen WSL: xrdp (the `rdp` section) then starts with systemd. `startrdp` and `stoprdp` start and stop it by hand.
 
 # Tests
 

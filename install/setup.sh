@@ -5,10 +5,7 @@
 #   setup.sh web pentest             only those sections (still in install order)
 #   setup.sh all                     every section, in install order
 #   setup.sh --dry-run [section...]  print what would run, change nothing
-#   setup.sh --no-wsl-conf ...       on WSL, leave /etc/wsl.conf alone
 #
-# On WSL, /etc/wsl.conf is installed first, whatever sections are chosen
-# (--no-wsl-conf skips it).
 # Each section is one script in install/ (see CONTEXT.md). A failing section
 # doesn't stop the next; setup lists the failed sections and exits non-zero.
 # shellcheck source=install/lib.sh
@@ -28,6 +25,7 @@ section_script() {
     mitm) echo mitm.sh ;;
     wordlists) echo wordlists.sh ;;
     rdp) echo rdp.sh ;;
+    wsl) echo wsl.sh ;;
     *) return 1 ;;
   esac
 }
@@ -47,18 +45,15 @@ usage() {
     printf '  %-12s %s\n' "${s%%:*}" "${s#*:}"
   done
   echo
-  echo "  --dry-run      print what would run, change nothing"
-  echo "  --no-wsl-conf  on WSL, leave /etc/wsl.conf as it is"
-  echo "  -h, --help     show this help"
+  echo "  --dry-run    print what would run, change nothing"
+  echo "  -h, --help   show this help"
 }
 
 wanted=()
 all=0
-wsl_conf=1
 for arg in "$@"; do
   case "$arg" in
     --dry-run) export HAKPAK_DRY_RUN=1 ;;
-    --no-wsl-conf) wsl_conf=0 ;;
     -h|--help) usage; exit 0 ;;
     -*) echo "unknown option: $arg"; echo; usage; exit 2 ;;
     all) all=1 ;;
@@ -82,26 +77,89 @@ if [ "${#wanted[@]}" -eq 0 ] && [ ! -t 0 ] && [ "${_HAKPAK_MENU_TTY:-0}" != 1 ];
   exit 2
 fi
 
-# The section menu: one checkbox per section, read key by key from stdin.
-# j/k or arrows move, space ticks, a ticks or unticks all, Enter installs,
-# q quits. Sets `wanted` to the ticked ids; returns 1 if nothing is installed.
+# The terminal's size as "rows cols": LINES and COLUMNS if set, else the
+# terminal (when $1 is 1: stdout is one); 0 for an unknown or no limit.
+menu_term_size() {
+  local h="${LINES:-}" w="${COLUMNS:-}" size
+  if { [ -z "$h" ] || [ -z "$w" ]; } && [ "$1" = 1 ]; then
+    size="$(stty size 2>/dev/null < /dev/tty)" || size=""
+    [ -z "$h" ] && h="${size% *}"
+    [ -z "$w" ] && w="${size#* }"
+  fi
+  [[ "$h" =~ ^[0-9]+$ ]] || h=0
+  [[ "$w" =~ ^[0-9]+$ ]] || w=0
+  echo "$h $w"
+}
+
+# Wrap tool names (one per line on stdin) into lines indented under their
+# section, each at most width-1 columns so it never reaches the last column.
+wrap_tool_names() {
+  local width="$1" indent="      " line="" name
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    if [ -n "$line" ] && [ $((${#line} + 1 + ${#name})) -ge "$width" ]; then
+      printf '%s\n' "$line"
+      line=""
+    fi
+    if [ -z "$line" ]; then line="$indent$name"; else line="$line $name"; fi
+  done
+  [ -n "$line" ] && printf '%s\n' "$line"
+  return 0
+}
+
+# The section menu: one checkbox per section, with the tools it installs
+# (from the Toolset manifest) below it, read key by key from stdin. When the
+# whole list is taller than the terminal, only the section under the cursor
+# shows its tools. j/k or arrows move, space ticks, a ticks or unticks all,
+# Enter installs, q quits. On WSL the wsl section starts ticked; it installs
+# no tools, so it lists the file it installs. Sets `wanted` to the ticked
+# ids; returns 1 if nothing is installed.
 choose_sections() {
-  local ids=() names=() s i cur=0 key rest note="" drawn=0 lines
+  local ids=() tools=() counts=() i cur=0 key rest note="" lines=0
+  local height cols width=80 full all_rows section name t
   mapfile -t ids < <(section_ids)
-  for s in "${HAKPAK_SECTIONS[@]}"; do names+=("${s#*:}"); done
-  local n=${#ids[@]} ticked=()
-  for ((i = 0; i < n; i++)); do ticked[i]=0; done
-  lines=$((n + 3))
+  local n=${#ids[@]} ticked=() redraw=0
+  [ -t 1 ] && redraw=1
+  read -r height cols < <(menu_term_size "$redraw")
+  [ "${_HAKPAK_MENU_REDRAW:-0}" = 1 ] && redraw=1
+  [ "$cols" -gt 0 ] && [ "$cols" -lt "$width" ] && width=$cols
+  # One pass over the manifest; a problem with it is reported once.
+  all_rows="$(toolset_rows "")" || all_rows=""
+  full=$((n + 3))
+  for ((i = 0; i < n; i++)); do
+    ticked[i]=0
+    if [ "${ids[i]}" = wsl ]; then
+      # Only /etc/wsl.conf, no tools; ticked on WSL.
+      is_wsl && ticked[i]=1
+      t="$(echo /etc/wsl.conf | wrap_tool_names "$width")"
+    else
+      t="$(while IFS=$'\t' read -r section _ name _; do
+        [ "$section" = "${ids[i]}" ] && printf '%s\n' "$name"
+      done <<< "$all_rows" | wrap_tool_names "$width")"
+    fi
+    tools[i]="$t"
+    counts[i]=0
+    [ -n "$t" ] && counts[i]=$(($(printf '%s\n' "$t" | wc -l)))
+    full=$((full + counts[i]))
+  done
+  local compact=0
+  [ "$height" -gt 0 ] && [ "$full" -ge "$height" ] && compact=1
   while true; do
     # On a terminal, draw over the last frame instead of below it.
-    if [ "$drawn" = 1 ] && [ -t 1 ]; then printf '\033[%dA\033[J' "$lines"; fi
-    drawn=1
+    if [ "$lines" -gt 0 ] && [ "$redraw" = 1 ]; then
+      printf '\033[%dA\033[J' "$lines"
+    fi
+    lines=$((n + 3))
     echo "Arrows or j/k move, space ticks, a ticks all, Enter installs, q quits"
     for ((i = 0; i < n; i++)); do
       local box="[ ]" mark=" "
       [ "${ticked[i]}" = 1 ] && box="[x]"
       [ "$i" = "$cur" ] && mark=">"
-      printf '%s %s %-12s %s\n' "$mark" "$box" "${ids[i]}" "${names[i]}"
+      printf '%s %s %s\n' "$mark" "$box" "${ids[i]}"
+      if [ -n "${tools[i]}" ] && { [ "$compact" = 0 ] || [ "$i" = "$cur" ]; }; then
+        printf '%s\n' "${tools[i]}"
+        lines=$((lines + counts[i]))
+      fi
     done
     echo
     echo "$note"
@@ -164,27 +222,14 @@ while IFS= read -r id; do
 done < <(section_ids)
 
 failed=()
-# On WSL, /etc/wsl.conf goes in whatever sections are chosen, unless
-# --no-wsl-conf. A file that is already there is backed up first.
-wsl_failed=0
-if [ "$wsl_conf" = 1 ] && is_wsl; then
-  echo "== WSL config"
-  install_wsl_conf || wsl_failed=1
-fi
-
 for id in "${selected[@]}"; do
   echo "== Section: $id"
   bash "$HAKPAK_ROOT/install/$(section_script "$id")" || failed+=("$id")
 done
 
 echo
-if [ "$wsl_failed" = 1 ]; then
-  log "Failed: /etc/wsl.conf"
-fi
 if [ "${#failed[@]}" -gt 0 ]; then
   log "Failed sections: ${failed[*]}"
-fi
-if [ "$wsl_failed" = 1 ] || [ "${#failed[@]}" -gt 0 ]; then
   exit 1
 fi
 log_ok "Done: ${selected[*]}"

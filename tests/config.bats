@@ -259,19 +259,20 @@ section() {
   ! grep -q "ln .*configs/zsh/.zsh_history" "$HAKPAK_DRY_RUN_LOG"
 }
 
-@test "rdp section copies wsl.conf instead of symlinking it" {
+@test "rdp section leaves wsl.conf to the wsl section" {
+  section rdp.sh
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  if grep -q "wsl.conf" "$HAKPAK_DRY_RUN_LOG"; then return 1; fi
+}
+
+@test "rdp section on WSL without systemd points to the wsl section" {
   mkdir -p "$HAKPAK_SYSROOT/proc/sys/kernel"
   echo 6.6.87.2-microsoft-standard-WSL2 > "$HAKPAK_SYSROOT/proc/sys/kernel/osrelease"
   section rdp.sh
-  grep -q "install -m 644 $REPO/configs/wsl.conf $HAKPAK_SYSROOT/etc/wsl.conf" "$HAKPAK_DRY_RUN_LOG"
-  ! grep -q "ln .*wsl.conf" "$HAKPAK_DRY_RUN_LOG"
-}
-
-@test "rdp section outside WSL leaves wsl.conf alone" {
-  mkdir -p "$HAKPAK_SYSROOT/proc/sys/kernel"
-  echo 6.8.0-45-generic > "$HAKPAK_SYSROOT/proc/sys/kernel/osrelease"
+  [[ "$output" == *"wsl section"* ]] || { echo "$output"; return 1; }
+  cp "$REPO/configs/wsl.conf" "$HAKPAK_SYSROOT/etc/wsl.conf"
   section rdp.sh
-  if grep -q "wsl.conf" "$HAKPAK_DRY_RUN_LOG"; then return 1; fi
+  [[ "$output" != *"wsl section"* ]] || { echo "$output"; return 1; }
 }
 
 @test "wsl.conf turns on systemd and turns off automount and interop" {

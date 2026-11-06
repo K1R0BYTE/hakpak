@@ -293,20 +293,6 @@ is_wsl() {
     [ -e "$HAKPAK_SYSROOT/proc/sys/fs/binfmt_misc/WSLInterop" ]
 }
 
-# On WSL, put configs/wsl.conf in /etc/wsl.conf (backing up a file that is
-# there) and say how to apply it. Does nothing outside WSL or when the copy
-# is already up to date. Fails if the copy fails.
-install_wsl_conf() {
-  is_wsl || return 0
-  if [ -f "$HAKPAK_SYSROOT/etc/wsl.conf" ] && [ ! -L "$HAKPAK_SYSROOT/etc/wsl.conf" ] &&
-    cmp -s "$HAKPAK_ROOT/configs/wsl.conf" "$HAKPAK_SYSROOT/etc/wsl.conf"; then
-    log_ok "/etc/wsl.conf already up to date"
-    return 0
-  fi
-  step 'wsl.conf' link_config wsl.conf /etc/wsl.conf || return 1
-  log 'Run "wsl --shutdown" from Windows and reopen WSL to apply /etc/wsl.conf'
-}
-
 has_command() {
   command -v "$1" >/dev/null 2>&1
 }

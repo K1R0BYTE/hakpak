@@ -28,6 +28,7 @@ HAKPAK_SECTIONS=(
   "mitm:MiTM"
   "wordlists:Wordlists"
   "rdp:RDP"
+  "wsl:WSL config"
 )
 
 HAKPAK_KINDS=(apt go pipx gem git venv url custom)

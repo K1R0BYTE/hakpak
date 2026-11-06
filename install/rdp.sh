@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
-# RDP section: the xrdp remote desktop, plus the WSL config it needs
-# (setup.sh installs it on WSL anyway; kept here so rdp.sh runs alone).
+# RDP section: the xrdp remote desktop. On WSL it needs systemd, which the
+# wsl section turns on.
 # Tools are listed in install/toolset.txt.
 # shellcheck source=install/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 require_normal_user
 
-# Copied, not linked: WSL reads it as root at boot. It turns systemd on,
-# which takes effect after `wsl --shutdown`. Only on WSL.
-install_wsl_conf
+# xrdp starts with systemd, which /etc/wsl.conf turns on: that is the wsl
+# section's job.
+if is_wsl && ! grep -qs '^systemd=true' "$HAKPAK_SYSROOT/etc/wsl.conf"; then
+  log 'systemd is off in /etc/wsl.conf: install the wsl section too, so xrdp starts at boot'
+fi
 
 # DNS and DHCP are left to WSL itself.
 
