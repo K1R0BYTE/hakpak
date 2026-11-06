@@ -38,8 +38,8 @@
 
 HAKPAK_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HAKPAK_OPT="${HAKPAK_OPT:-/opt}"
-# Prefix for /etc targets of link_config. Empty on a real install; tests
-# point it at a temp dir.
+# Prefix for system paths: /etc targets of link_config, and the /proc file
+# is_wsl reads. Empty on a real install; tests point it at a temp dir.
 HAKPAK_SYSROOT="${HAKPAK_SYSROOT:-}"
 export HAKPAK_ROOT HAKPAK_OPT HAKPAK_SYSROOT
 
@@ -217,9 +217,14 @@ link_config() {
   _run_at "$target" ln -sfn "$src" "$target"
 }
 
+# True if target is a real file (not a link) with the same content as src.
+config_up_to_date() {
+  [ -f "$2" ] && [ ! -L "$2" ] && cmp -s "$1" "$2"
+}
+
 _copy_config() {
   local src="$1" target="$2"
-  if [ -f "$target" ] && [ ! -L "$target" ] && cmp -s "$src" "$target"; then
+  if config_up_to_date "$src" "$target"; then
     log_ok "$target already up to date"
     return 0
   fi
@@ -284,6 +289,23 @@ _merge_history_into() {
     return 1
   fi
   chmod 600 "$tmp" && mv -f "$tmp" "$target"
+}
+
+# True on WSL (1 or 2, any distro): its kernel release names Microsoft, or
+# (for a custom WSL2 kernel) its interop handler is registered.
+is_wsl() {
+  grep -qi microsoft "$HAKPAK_SYSROOT/proc/sys/kernel/osrelease" 2>/dev/null ||
+    [ -e "$HAKPAK_SYSROOT/proc/sys/fs/binfmt_misc/WSLInterop" ]
+}
+
+# True if a wsl.conf turns on systemd: systemd=true under [boot], any case,
+# spaces around the = allowed. False for a missing file.
+wsl_conf_has_systemd() {
+  awk '
+    /^[[:space:]]*\[/ { boot = (tolower($0) ~ /^[[:space:]]*\[boot\][[:space:]]*$/); next }
+    boot && tolower($0) ~ /^[[:space:]]*systemd[[:space:]]*=[[:space:]]*true[[:space:]]*$/ { on = 1 }
+    END { exit !on }
+  ' "$1" 2>/dev/null
 }
 
 has_command() {

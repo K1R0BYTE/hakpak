@@ -65,6 +65,7 @@ recorded() {
   [ "${#HAKPAK_SECTIONS[@]}" -gt 0 ]
   for s in "${HAKPAK_SECTIONS[@]}"; do
     id="${s%%:*}"
+    [ "$id" = wsl ] && continue  # config only: /etc/wsl.conf, no tools
     [ -n "$(toolset_rows "$id")" ] || { echo "$id has no tools"; return 1; }
     grep -q "^install_section $id\$" "$REPO"/install/*.sh || { echo "no script runs install_section $id"; return 1; }
   done

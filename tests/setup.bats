@@ -33,7 +33,7 @@ menu_keys() {
   run bash -c 'printf "$1" | _HAKPAK_MENU_TTY=1 bash "$2" "${@:3}"' _ "$keys" "$REPO/install/setup.sh" "$@"
 }
 
-ALL="system environment basic surfing web pentest cloud cicd mitm wordlists rdp"
+ALL="system environment basic surfing web pentest cloud cicd mitm wordlists wsl rdp"
 
 # Section ids setup.sh announced, in order, one per line.
 sections_run() {
@@ -72,7 +72,7 @@ no_real_calls() {
   setup_sh web nope --dry-run
   [ "$status" -ne 0 ]
   [[ "$output" == *"unknown section: nope"* ]]
-  for s in system environment basic surfing web pentest cloud cicd mitm wordlists rdp; do
+  for s in system environment basic surfing web pentest cloud cicd mitm wordlists wsl rdp; do
     [[ "$output" == *"$s"* ]] || { echo "missing $s in: $output"; return 1; }
   done
   [ -z "$(sections_run)" ]
@@ -225,6 +225,7 @@ no_real_calls() {
   source "$REPO/install/lib.sh"
   for s in $ALL; do
     want="$(toolset_rows "$s" | cut -f3 | paste -sd' ')"
+    [ "$s" = wsl ] && want=/etc/wsl.conf  # config only, no tools
     got="$(section_tools "$s" | paste -sd' ')"
     [ "$got" = "$want" ] || { echo "$s: want '$want', got '$got'"; return 1; }
   done
@@ -316,4 +317,48 @@ no_real_calls() {
 
 @test "addrep.sh is gone" {
   [ ! -e "$REPO/install/addrep.sh" ]
+}
+
+
+# --- the wsl section in the menu ---
+
+fake_wsl() {
+  mkdir -p "$HAKPAK_SYSROOT/proc/sys/kernel"
+  echo 6.6.87.2-microsoft-standard-WSL2 > "$HAKPAK_SYSROOT/proc/sys/kernel/osrelease"
+}
+
+@test "menu: on WSL, the wsl section starts ticked" {
+  fake_wsl
+  menu_keys 'q' --dry-run
+  [[ "$output" == *"[x] wsl"* ]] || { echo "$output"; return 1; }
+  [[ "$output" == *"[ ] rdp"* ]]
+}
+
+@test "menu: on WSL, Enter right away installs only the wsl section" {
+  fake_wsl
+  menu_keys '\n' --dry-run
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [ "$(sections_run | paste -sd' ')" = "wsl" ]
+}
+
+@test "menu: outside WSL, the wsl section starts unticked" {
+  menu_keys 'q' --dry-run
+  [[ "$output" == *"[ ] wsl"* ]] || { echo "$output"; return 1; }
+}
+
+@test "setup installs wsl.conf only when the wsl section is chosen" {
+  fake_wsl
+  export HAKPAK_DRY_RUN_LOG="$BATS_TEST_TMPDIR/dry.log"
+  : > "$HAKPAK_DRY_RUN_LOG"
+  setup_sh --dry-run web
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  if grep -q "wsl.conf" "$HAKPAK_DRY_RUN_LOG"; then return 1; fi
+  setup_sh --dry-run wsl
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  grep -q "install -m 644 $REPO/configs/wsl.conf $HAKPAK_SYSROOT/etc/wsl.conf" "$HAKPAK_DRY_RUN_LOG"
+}
+
+@test "menu: the wsl section lists the file it installs, like the tool lists" {
+  menu_keys 'q' --dry-run
+  grep -A1 -E '^. \[.\] wsl$' <<< "$output" | grep -qx '      /etc/wsl.conf' || { echo "$output"; return 1; }
 }

@@ -24,6 +24,7 @@ section_script() {
     cicd) echo cicd.sh ;;
     mitm) echo mitm.sh ;;
     wordlists) echo wordlists.sh ;;
+    wsl) echo wsl.sh ;;
     rdp) echo rdp.sh ;;
     *) return 1 ;;
   esac
@@ -110,8 +111,9 @@ wrap_tool_names() {
 # (from the Toolset manifest) below it, read key by key from stdin. When the
 # whole list is taller than the terminal, only the section under the cursor
 # shows its tools. j/k or arrows move, space ticks, a ticks or unticks all,
-# Enter installs, q quits. Sets `wanted` to the ticked ids; returns 1 if
-# nothing is installed.
+# Enter installs, q quits. On WSL the wsl section starts ticked; it installs
+# no tools, so it lists the file it installs. Sets `wanted` to the ticked
+# ids; returns 1 if nothing is installed.
 choose_sections() {
   local ids=() tools=() counts=() i cur=0 key rest note="" lines=0
   local height cols width=80 full all_rows section name t
@@ -126,9 +128,15 @@ choose_sections() {
   full=$((n + 3))
   for ((i = 0; i < n; i++)); do
     ticked[i]=0
-    t="$(while IFS=$'\t' read -r section _ name _; do
-      [ "$section" = "${ids[i]}" ] && printf '%s\n' "$name"
-    done <<< "$all_rows" | wrap_tool_names "$width")"
+    if [ "${ids[i]}" = wsl ]; then
+      # Only /etc/wsl.conf, no tools; ticked on WSL.
+      is_wsl && ticked[i]=1
+      t="$(echo /etc/wsl.conf | wrap_tool_names "$width")"
+    else
+      t="$(while IFS=$'\t' read -r section _ name _; do
+        [ "$section" = "${ids[i]}" ] && printf '%s\n' "$name"
+      done <<< "$all_rows" | wrap_tool_names "$width")"
+    fi
     tools[i]="$t"
     counts[i]=0
     [ -n "$t" ] && counts[i]=$(($(printf '%s\n' "$t" | wc -l)))

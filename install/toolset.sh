@@ -27,6 +27,7 @@ HAKPAK_SECTIONS=(
   "cicd:CI/CD"
   "mitm:MiTM"
   "wordlists:Wordlists"
+  "wsl:WSL config"
   "rdp:RDP"
 )
 
