@@ -5,8 +5,10 @@
 #   setup.sh web pentest             only those sections (still in install order)
 #   setup.sh all                     every section, in install order
 #   setup.sh --dry-run [section...]  print what would run, change nothing
+#   setup.sh --no-wsl-conf ...       on WSL, leave /etc/wsl.conf alone
 #
-# On WSL, /etc/wsl.conf is installed first, whatever sections are chosen.
+# On WSL, /etc/wsl.conf is installed first, whatever sections are chosen
+# (--no-wsl-conf skips it).
 # Each section is one script in install/ (see CONTEXT.md). A failing section
 # doesn't stop the next; setup lists the failed sections and exits non-zero.
 # shellcheck source=install/lib.sh
@@ -45,15 +47,18 @@ usage() {
     printf '  %-12s %s\n' "${s%%:*}" "${s#*:}"
   done
   echo
-  echo "  --dry-run    print what would run, change nothing"
-  echo "  -h, --help   show this help"
+  echo "  --dry-run      print what would run, change nothing"
+  echo "  --no-wsl-conf  on WSL, leave /etc/wsl.conf as it is"
+  echo "  -h, --help     show this help"
 }
 
 wanted=()
 all=0
+wsl_conf=1
 for arg in "$@"; do
   case "$arg" in
     --dry-run) export HAKPAK_DRY_RUN=1 ;;
+    --no-wsl-conf) wsl_conf=0 ;;
     -h|--help) usage; exit 0 ;;
     -*) echo "unknown option: $arg"; echo; usage; exit 2 ;;
     all) all=1 ;;
@@ -159,15 +164,12 @@ while IFS= read -r id; do
 done < <(section_ids)
 
 failed=()
-# On WSL, /etc/wsl.conf goes in whatever sections are chosen. link_config
-# backs up a file that is already there; an unchanged copy is left alone.
-if is_wsl; then
+# On WSL, /etc/wsl.conf goes in whatever sections are chosen, unless
+# --no-wsl-conf. A file that is already there is backed up first.
+wsl_failed=0
+if [ "$wsl_conf" = 1 ] && is_wsl; then
   echo "== WSL config"
-  if step 'wsl.conf' link_config wsl.conf /etc/wsl.conf; then
-    log 'Run "wsl --shutdown" from Windows and reopen WSL to apply /etc/wsl.conf'
-  else
-    failed+=(wsl.conf)
-  fi
+  install_wsl_conf || wsl_failed=1
 fi
 
 for id in "${selected[@]}"; do
@@ -176,8 +178,13 @@ for id in "${selected[@]}"; do
 done
 
 echo
+if [ "$wsl_failed" = 1 ]; then
+  log "Failed: /etc/wsl.conf"
+fi
 if [ "${#failed[@]}" -gt 0 ]; then
   log "Failed sections: ${failed[*]}"
+fi
+if [ "$wsl_failed" = 1 ] || [ "${#failed[@]}" -gt 0 ]; then
   exit 1
 fi
 log_ok "Done: ${selected[*]}"

@@ -6,10 +6,9 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 require_normal_user
 
-log 'Configuring WSL'
 # Copied, not linked: WSL reads it as root at boot. It turns systemd on,
-# which takes effect after `wsl --shutdown`.
-step 'wsl.conf' link_config wsl.conf /etc/wsl.conf
+# which takes effect after `wsl --shutdown`. Only on WSL.
+install_wsl_conf
 
 # DNS and DHCP are left to WSL itself.
 

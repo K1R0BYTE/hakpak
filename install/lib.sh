@@ -286,9 +286,25 @@ _merge_history_into() {
   chmod 600 "$tmp" && mv -f "$tmp" "$target"
 }
 
-# True on WSL (1 or 2, any distro): its kernel release names Microsoft.
+# True on WSL (1 or 2, any distro): its kernel release names Microsoft, or
+# (for a custom WSL2 kernel) its interop handler is registered.
 is_wsl() {
-  grep -qi microsoft "$HAKPAK_SYSROOT/proc/sys/kernel/osrelease" 2>/dev/null
+  grep -qi microsoft "$HAKPAK_SYSROOT/proc/sys/kernel/osrelease" 2>/dev/null ||
+    [ -e "$HAKPAK_SYSROOT/proc/sys/fs/binfmt_misc/WSLInterop" ]
+}
+
+# On WSL, put configs/wsl.conf in /etc/wsl.conf (backing up a file that is
+# there) and say how to apply it. Does nothing outside WSL or when the copy
+# is already up to date. Fails if the copy fails.
+install_wsl_conf() {
+  is_wsl || return 0
+  if [ -f "$HAKPAK_SYSROOT/etc/wsl.conf" ] && [ ! -L "$HAKPAK_SYSROOT/etc/wsl.conf" ] &&
+    cmp -s "$HAKPAK_ROOT/configs/wsl.conf" "$HAKPAK_SYSROOT/etc/wsl.conf"; then
+    log_ok "/etc/wsl.conf already up to date"
+    return 0
+  fi
+  step 'wsl.conf' link_config wsl.conf /etc/wsl.conf || return 1
+  log 'Run "wsl --shutdown" from Windows and reopen WSL to apply /etc/wsl.conf'
 }
 
 has_command() {

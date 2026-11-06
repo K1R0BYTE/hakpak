@@ -291,8 +291,46 @@ fake_linux() {
   export HAKPAK_DRY_RUN_LOG="$BATS_TEST_TMPDIR/dry.log"
   setup_sh --dry-run web
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-  ! grep -q "wsl.conf" "$HAKPAK_DRY_RUN_LOG"
+  if grep -q "wsl.conf" "$HAKPAK_DRY_RUN_LOG"; then return 1; fi
   [[ "$output" != *"wsl --shutdown"* ]]
+}
+
+@test "WSL with its interop file but a custom kernel counts as WSL too" {
+  fake_linux
+  mkdir -p "$HAKPAK_SYSROOT/proc/sys/fs/binfmt_misc"
+  : > "$HAKPAK_SYSROOT/proc/sys/fs/binfmt_misc/WSLInterop"
+  export HAKPAK_DRY_RUN_LOG="$BATS_TEST_TMPDIR/dry.log"
+  setup_sh --dry-run web
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  grep -q "$HAKPAK_SYSROOT/etc/wsl.conf" "$HAKPAK_DRY_RUN_LOG"
+}
+
+@test "on WSL, an up-to-date wsl.conf is left alone and asks for no restart" {
+  fake_wsl
+  mkdir -p "$HAKPAK_SYSROOT/etc"
+  cp "$REPO/configs/wsl.conf" "$HAKPAK_SYSROOT/etc/wsl.conf"
+  export HAKPAK_DRY_RUN_LOG="$BATS_TEST_TMPDIR/dry.log"
+  : > "$HAKPAK_DRY_RUN_LOG"
+  setup_sh --dry-run web
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  if grep -q "wsl.conf" "$HAKPAK_DRY_RUN_LOG"; then return 1; fi
+  [[ "$output" == *"already up to date"* ]]
+  [[ "$output" != *"wsl --shutdown"* ]]
+}
+
+@test "--no-wsl-conf skips wsl.conf on WSL" {
+  fake_wsl
+  export HAKPAK_DRY_RUN_LOG="$BATS_TEST_TMPDIR/dry.log"
+  : > "$HAKPAK_DRY_RUN_LOG"
+  setup_sh --dry-run --no-wsl-conf web
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [ "$(sections_run | paste -sd' ')" = "web" ]
+  if grep -q "wsl.conf" "$HAKPAK_DRY_RUN_LOG"; then return 1; fi
+}
+
+@test "--help mentions --no-wsl-conf" {
+  setup_sh --help
+  [[ "$output" == *"--no-wsl-conf"* ]]
 }
 
 @test "on WSL, quitting the menu installs no wsl.conf" {
@@ -314,7 +352,8 @@ fake_linux() {
   printf 'web apt only-web\n' > "$HAKPAK_TOOLSET"
   setup_sh web
   [ "$status" -ne 0 ]
-  [[ "$output" == *"Failed sections: wsl.conf"* ]] || { echo "$output"; return 1; }
+  [[ "$output" == *"Failed: /etc/wsl.conf"* ]] || { echo "$output"; return 1; }
+  [[ "$output" != *"Failed sections: wsl.conf"* ]]
   # the sections still ran
   [ "$(sections_run | paste -sd' ')" = "web" ]
 }
