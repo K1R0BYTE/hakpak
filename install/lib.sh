@@ -65,6 +65,10 @@ HAKPAK_FAILED=()
 _RED="\033[1;31m"
 _GREEN="\033[1;32m"
 _NOCOLOR="\033[0m"
+# NO_COLOR (set and not empty, see no-color.org) turns hakpak's colors off.
+if [ -n "${NO_COLOR:-}" ]; then
+  _RED="" _GREEN="" _NOCOLOR=""
+fi
 
 log() {
   echo -e "[*] ${_RED}${1}${_NOCOLOR}"

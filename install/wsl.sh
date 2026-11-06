@@ -31,25 +31,27 @@ if config_up_to_date "$ours" "$target"; then
   exit 0
 fi
 
-# Show yours ($1) against hakpak's ($2) as a unified diff: lines only in
-# yours red, only in hakpak's green, hunk headers cyan, with a legend.
-# NO_COLOR (any value) turns colors off; the -/+ markers carry the meaning.
+# Show yours ($1) against hakpak's ($2) as a unified diff, with a legend.
+# On a terminal, lines only in yours are red, only in hakpak's green, and
+# hunk headers cyan; NO_COLOR turns that off. The -/+ markers carry the
+# meaning either way.
 show_wsl_conf_diff() {
-  local red="" green="" cyan="" off=""
-  if [ -z "${NO_COLOR+x}" ]; then
-    red=$'\e[1;31m' green=$'\e[1;32m' cyan=$'\e[36m' off=$'\e[0m'
+  local red="" green="" cyan="" off="" rw="" gw="" n=0 line
+  if { [ -t 1 ] || [ "${_HAKPAK_COLOR:-0}" = 1 ]; } && [ -n "$_NOCOLOR" ]; then
+    red="$(printf '%b' "$_RED")" green="$(printf '%b' "$_GREEN")"
+    off="$(printf '%b' "$_NOCOLOR")" cyan=$'\e[36m' rw=" red:" gw=" green:"
   fi
-  if [ -n "$red" ]; then
-    echo "  ${red}- red: only in yours${off}"
-    echo "  ${green}+ green: only in hakpak's${off}"
-  else
-    echo "  - only in yours"
-    echo "  + only in hakpak's"
-  fi
+  echo "  ${red}-${rw} only in yours${off}"
+  echo "  ${green}+${gw} only in hakpak's${off}"
   diff -u --label "/etc/wsl.conf (yours)" --label "configs/wsl.conf (hakpak)" "$1" "$2" |
     while IFS= read -r line; do
+      n=$((n + 1))
+      # The first two lines name the files; after that -/+ mark lines.
+      if [ "$n" -le 2 ]; then
+        printf '%s\n' "$line"
+        continue
+      fi
       case "$line" in
-        "--- "* | "+++ "*) printf '%s\n' "$line" ;;
         "@@"*) printf '%s%s%s\n' "$cyan" "$line" "$off" ;;
         -*) printf '%s%s%s\n' "$red" "$line" "$off" ;;
         +*) printf '%s%s%s\n' "$green" "$line" "$off" ;;
@@ -92,6 +94,10 @@ fi
 if [ "$mine" = 1 ]; then
   if [ ! -f "$target" ]; then
     echo "/etc/wsl.conf is not a file: move it away, then run the wsl section again"
+    exit 1
+  fi
+  if [ ! -r "$target" ]; then
+    echo "Can't read /etc/wsl.conf to compare it: make it readable (it is usually mode 644)"
     exit 1
   fi
   echo "Your /etc/wsl.conf differs from hakpak's:"
