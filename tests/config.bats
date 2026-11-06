@@ -259,8 +259,8 @@ section() {
   ! grep -q "ln .*configs/zsh/.zsh_history" "$HAKPAK_DRY_RUN_LOG"
 }
 
-@test "wsl section copies wsl.conf instead of symlinking it" {
-  section wsl.sh
+@test "rdp section copies wsl.conf instead of symlinking it" {
+  section rdp.sh
   grep -q "install -m 644 $REPO/configs/wsl.conf $HAKPAK_SYSROOT/etc/wsl.conf" "$HAKPAK_DRY_RUN_LOG"
   ! grep -q "ln .*wsl.conf" "$HAKPAK_DRY_RUN_LOG"
 }
@@ -280,9 +280,9 @@ appendWindowsPath=false
 EOF
 }
 
-@test "wsl section uses systemctl, not /etc/init.d" {
-  section wsl.sh
-  ! grep -q '/etc/init.d' "$REPO/install/wsl.sh"
+@test "rdp section uses systemctl, not /etc/init.d" {
+  section rdp.sh
+  ! grep -q '/etc/init.d' "$REPO/install/rdp.sh"
   grep -q "systemctl enable xrdp" "$HAKPAK_DRY_RUN_LOG"
 }
 
@@ -292,11 +292,11 @@ EOF
   ! grep -q 'service xrdp' "$REPO/system/.alias"
 }
 
-@test "wsl section backs up xrdp.ini only once and anchors its edits" {
-  section wsl.sh
+@test "rdp section backs up xrdp.ini only once and anchors its edits" {
+  section rdp.sh
   grep -q 'cp -p /etc/xrdp/xrdp.ini /etc/xrdp/xrdp.ini.bak' "$HAKPAK_DRY_RUN_LOG"
-  grep -q 'if \[ ! -e /etc/xrdp/xrdp.ini.bak \]' "$REPO/install/wsl.sh"
-  ! grep -q 's/max_bpp=32/#max_bpp' "$REPO/install/wsl.sh"
+  grep -q 'if \[ ! -e /etc/xrdp/xrdp.ini.bak \]' "$REPO/install/rdp.sh"
+  ! grep -q 's/max_bpp=32/#max_bpp' "$REPO/install/rdp.sh"
 }
 
 @test "xrdp.ini edits are idempotent" {
@@ -307,7 +307,7 @@ max_bpp=32
 [Xvnc]
 #xserverbpp=24
 EOF
-  expr="$(grep -o "s/^port=3389.*'" "$REPO/install/wsl.sh" | head -n1)"
+  expr="$(grep -o "s/^port=3389.*'" "$REPO/install/rdp.sh" | head -n1)"
   expr="${expr%\'}"
   [ -n "$expr" ]
   sed -i -E "$expr" "$BATS_TEST_TMPDIR/xrdp.ini"
