@@ -27,9 +27,10 @@ setup_sh() {
 }
 
 # Run setup.sh with the given keys typed into the menu (printf format).
+# _HAKPAK_MENU_TTY=1 lets the menu read the pipe as if it were a terminal.
 menu_keys() {
   local keys="$1"; shift
-  run bash -c 'printf "$1" | bash "$2" "${@:3}"' _ "$keys" "$REPO/install/setup.sh" "$@"
+  run bash -c 'printf "$1" | _HAKPAK_MENU_TTY=1 bash "$2" "${@:3}"' _ "$keys" "$REPO/install/setup.sh" "$@"
 }
 
 ALL="system environment basic surfing web pentest cloud cicd mitm wordlists rdp"
@@ -160,9 +161,11 @@ no_real_calls() {
 
 @test "menu: the cursor stops at the first and last section" {
   menu_keys 'kkk \n' --dry-run
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [ "$(sections_run | paste -sd' ')" = "system" ]
   menu_keys 'jjjjjjjjjjjjjjjjjjjj \n' --dry-run
-  [ "$(sections_run | paste -sd' ')" = "wsl" ]
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [ "$(sections_run | paste -sd' ')" = "rdp" ]
 }
 
 @test "menu: Enter with nothing ticked asks again instead of installing" {
@@ -181,9 +184,32 @@ no_real_calls() {
 }
 
 @test "menu: end of input quits without installing anything" {
-  setup_sh --dry-run
+  menu_keys ' j' --dry-run
   [ "$status" -ne 0 ]
   [[ "$output" == *"Nothing installed"* ]]
+  [ -z "$(sections_run)" ]
+  no_real_calls
+}
+
+@test "menu: SS3 arrow keys (application cursor mode) move the cursor too" {
+  menu_keys '\033OB\033OB \033OA \n' --dry-run
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [ "$(sections_run | paste -sd' ')" = "environment basic" ]
+}
+
+@test "menu: no line is wider than 79 columns, so redraws don't wrap" {
+  menu_keys 'q' --dry-run
+  local line
+  while IFS= read -r line; do
+    [ "${#line}" -lt 80 ] || { echo "too wide (${#line}): $line"; return 1; }
+  done < <(grep -E '^(Choose|[> ] \[)' <<< "$output")
+}
+
+@test "no sections and no terminal: asks for section names, reads nothing as keys" {
+  run bash -c 'printf " \n" | bash "$1" --dry-run' _ "$REPO/install/setup.sh"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"pass section names or all"* ]]
+  [[ "$output" != *"[ ] system"* ]]
   [ -z "$(sections_run)" ]
   no_real_calls
 }
