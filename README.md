@@ -24,7 +24,7 @@ git clone https://github.com/K1R0BYTE/hakpak.git ${HOME}/.hakpak && cd ${HOME}/.
 bash setup.sh
 ```
 
-With no arguments `setup.sh` opens a menu: move with the arrow keys (or j/k), tick sections with space (`a` ticks all), press Enter to install the ticked ones, or q to quit. The menu needs a terminal; in scripts and CI, name the sections or pass `all`. You can also name sections to install only those, in install order, or pass `all`; `--dry-run` prints what would run and changes nothing:
+With no arguments `setup.sh` opens a menu that lists each section with the tools it installs: move with the arrow keys (or j/k), tick sections with space (`a` ticks all), press Enter to install the ticked ones, or q to quit. The menu needs a terminal; in scripts and CI, name the sections or pass `all`. You can also name sections to install only those, in install order, or pass `all`; `--dry-run` prints what would run and changes nothing:
 
 ```
 bash setup.sh                        # menu: tick the sections to install

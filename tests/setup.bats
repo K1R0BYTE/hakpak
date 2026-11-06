@@ -202,7 +202,42 @@ no_real_calls() {
   local line
   while IFS= read -r line; do
     [ "${#line}" -lt 80 ] || { echo "too wide (${#line}): $line"; return 1; }
-  done < <(grep -E '^(Choose|[> ] \[)' <<< "$output")
+  done < <(grep -E '^(Arrows|[> ] \[|      )' <<< "$output")
+}
+
+@test "menu: under each section it lists that section's tools from the manifest" {
+  menu_keys 'q' --dry-run
+  # The tools printed between one section line and the next.
+  section_tools() {
+    awk -v id="$1" '
+      /^[> ] \[.\] / { l = substr($0, 7); split(l, f, " "); on = (f[1] == id); next }
+      on && /^      / { for (i = 1; i <= NF; i++) print $i }
+      on && !/^      / { on = 0 }
+    ' <<< "$output"
+  }
+  source "$REPO/install/lib.sh"
+  for s in $ALL; do
+    want="$(toolset_rows "$s" | cut -f3 | paste -sd' ')"
+    got="$(section_tools "$s" | paste -sd' ')"
+    [ "$got" = "$want" ] || { echo "$s: want '$want', got '$got'"; return 1; }
+  done
+}
+
+@test "menu: a tool added to the manifest shows up in the menu" {
+  cp "$REPO/install/toolset.txt" "$BATS_TEST_TMPDIR/toolset.txt"
+  echo "rdp  apt  zz-new-tool" >> "$BATS_TEST_TMPDIR/toolset.txt"
+  HAKPAK_TOOLSET="$BATS_TEST_TMPDIR/toolset.txt" menu_keys 'q' --dry-run
+  [[ "$output" == *"zz-new-tool"* ]] || { echo "$output"; return 1; }
+}
+
+@test "menu: redraws move up over the whole frame, tool lines included" {
+  # _HAKPAK_MENU_REDRAW=1 redraws as on a terminal. One key: two frames,
+  # with a cursor-up of exactly the first frame's height between them.
+  run bash -c 'printf "j" | _HAKPAK_MENU_TTY=1 _HAKPAK_MENU_REDRAW=1 bash "$1" --dry-run' _ "$REPO/install/setup.sh"
+  up="$(grep -aoE $'\033\\[[0-9]+A' <<< "$output" | tr -dc 0-9)"
+  [ -n "$up" ] || { echo "no redraw in: $output"; return 1; }
+  frame="$(sed -n '/^Arrows or j\/k move/,$p' <<< "$output" | sed $'/\033\\[/,$d' | wc -l)"
+  [ "$up" -eq "$frame" ] || { echo "moves up $up, frame is $frame lines"; return 1; }
 }
 
 @test "no sections and no terminal: asks for section names, reads nothing as keys" {

@@ -76,19 +76,42 @@ if [ "${#wanted[@]}" -eq 0 ] && [ ! -t 0 ] && [ "${_HAKPAK_MENU_TTY:-0}" != 1 ];
   exit 2
 fi
 
-# The section menu: one checkbox per section, read key by key from stdin.
-# j/k or arrows move, space ticks, a ticks or unticks all, Enter installs,
-# q quits. Sets `wanted` to the ticked ids; returns 1 if nothing is installed.
+# The tools of one section from the Toolset manifest, as lines of names
+# indented under the section and wrapped to fit 79 columns.
+section_tool_lines() {
+  local indent="      " width=79 line="" name
+  while IFS=$'\t' read -r _ _ name _; do
+    if [ -n "$line" ] && [ $((${#line} + 1 + ${#name})) -gt "$width" ]; then
+      printf '%s\n' "$line"
+      line=""
+    fi
+    if [ -z "$line" ]; then line="$indent$name"; else line="$line $name"; fi
+  done < <(toolset_rows "$1")
+  [ -n "$line" ] && printf '%s\n' "$line"
+  return 0
+}
+
+# The section menu: one checkbox per section, with the tools it installs
+# below it, read key by key from stdin. j/k or arrows move, space ticks,
+# a ticks or unticks all, Enter installs, q quits. Sets `wanted` to the
+# ticked ids; returns 1 if nothing is installed.
 choose_sections() {
-  local ids=() names=() s i cur=0 key rest note="" drawn=0 lines
+  local ids=() names=() tools=() s i cur=0 key rest note="" drawn=0 lines
   mapfile -t ids < <(section_ids)
   for s in "${HAKPAK_SECTIONS[@]}"; do names+=("${s#*:}"); done
-  local n=${#ids[@]} ticked=()
-  for ((i = 0; i < n; i++)); do ticked[i]=0; done
+  local n=${#ids[@]} ticked=() t
   lines=$((n + 3))
+  for ((i = 0; i < n; i++)); do
+    ticked[i]=0
+    t="$(section_tool_lines "${ids[i]}")"
+    tools[i]="$t"
+    [ -n "$t" ] && lines=$((lines + $(grep -c '' <<< "$t")))
+  done
   while true; do
     # On a terminal, draw over the last frame instead of below it.
-    if [ "$drawn" = 1 ] && [ -t 1 ]; then printf '\033[%dA\033[J' "$lines"; fi
+    if [ "$drawn" = 1 ] && { [ -t 1 ] || [ "${_HAKPAK_MENU_REDRAW:-0}" = 1 ]; }; then
+      printf '\033[%dA\033[J' "$lines"
+    fi
     drawn=1
     echo "Arrows or j/k move, space ticks, a ticks all, Enter installs, q quits"
     for ((i = 0; i < n; i++)); do
@@ -96,6 +119,7 @@ choose_sections() {
       [ "${ticked[i]}" = 1 ] && box="[x]"
       [ "$i" = "$cur" ] && mark=">"
       printf '%s %s %-12s %s\n' "$mark" "$box" "${ids[i]}" "${names[i]}"
+      [ -n "${tools[i]}" ] && printf '%s\n' "${tools[i]}"
     done
     echo
     echo "$note"
