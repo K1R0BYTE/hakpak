@@ -2,7 +2,7 @@
 #
 #   section  kind  name  [source...]  # note shown in the README
 #
-# Sections: system environment basic surfing web pentest cloud cicd mitm wordlists wsl
+# Sections: system environment basic surfing web pentest cloud cicd mitm wordlists rdp
 # Kinds (see install/lib.sh): apt go pipx gem git venv url custom
 #   custom: the source is a function in install/custom.sh
 # In a source, $HOME and $HAKPAK_OPT are replaced; nothing else expands.
@@ -100,7 +100,7 @@ mitm  pipx  mitmproxy
 # --- Wordlists ---
 wordlists  git  seclists  https://github.com/danielmiessler/SecLists  $HAKPAK_OPT/wordlists/seclists
 
-# --- WSL ---
-wsl  apt  xfce4
-wsl  apt  xrdp                                  # remote desktop on port 3390
-wsl  apt  dbus-x11
+# --- RDP ---
+rdp  apt  xfce4
+rdp  apt  xrdp                                  # remote desktop on port 3390
+rdp  apt  dbus-x11

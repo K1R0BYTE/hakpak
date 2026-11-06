@@ -27,7 +27,7 @@ HAKPAK_SECTIONS=(
   "cicd:CI/CD"
   "mitm:MiTM"
   "wordlists:Wordlists"
-  "wsl:WSL"
+  "rdp:RDP"
 )
 
 HAKPAK_KINDS=(apt go pipx gem git venv url custom)
