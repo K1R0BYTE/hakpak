@@ -307,7 +307,9 @@ _install_go() {
     log_ok "$name already installed"
     return 0
   fi
-  run_step go install -v "$module"
+  # A fresh /opt is root's; make GOPATH yours so go install runs without sudo.
+  ensure_dir "$GOPATH" &&
+    run_step go install -v "$module"
 }
 
 _install_pipx() {
