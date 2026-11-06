@@ -240,6 +240,44 @@ no_real_calls() {
   [ "$up" -eq "$frame" ] || { echo "moves up $up, frame is $frame lines"; return 1; }
 }
 
+@test "menu: tool lines wrap to a terminal narrower than 80 columns" {
+  COLUMNS=50 menu_keys 'q' --dry-run
+  local line
+  while IFS= read -r line; do
+    [ "${#line}" -lt 50 ] || { echo "too wide (${#line}): $line"; return 1; }
+  done < <(grep -E '^      ' <<< "$output")
+  [[ "$output" == *"gowitness"* ]]
+}
+
+@test "menu: on a short terminal only the section under the cursor lists its tools" {
+  LINES=20 menu_keys 'jq' --dry-run
+  first="$(sed -n '/^Arrows or j\/k move/,/^Arrows or j\/k move/p' <<< "$output")"
+  [[ "$first" == *"build-essential"* ]] || { echo "$first"; return 1; }
+  [[ "$first" != *"python3-pip"* ]] || { echo "$first"; return 1; }
+  second="$(sed -n '1,/^Arrows or j\/k move/!p' <<< "$output" | sed -n '/^Arrows or j\/k move/,$p')"
+  [[ "$second" == *"python3-pip"* ]] || { echo "$second"; return 1; }
+  [[ "$second" != *"build-essential"* ]] || { echo "$second"; return 1; }
+}
+
+@test "menu: on a short terminal, a frame still fits and redraws over the last one" {
+  run bash -c 'printf "jj" | LINES=20 _HAKPAK_MENU_TTY=1 _HAKPAK_MENU_REDRAW=1 bash "$1" --dry-run' _ "$REPO/install/setup.sh"
+  ups="$(grep -aoE $'\033\\[[0-9]+A' <<< "$output" | tr -dc '0-9\n')"
+  [ "$(wc -l <<< "$ups")" -eq 2 ] || { echo "redraws: $ups"; return 1; }
+  # frames, split at each redraw
+  frames="$(sed -n '/^Arrows or j\/k move/,$p' <<< "$output" | sed $'s/\033\\[[0-9]*A\033\\[J/=REDRAW=\\\n/')"
+  f1="$(awk '/^=REDRAW=$/{exit} {n++} END{print n}' <<< "$frames")"
+  f2="$(awk '/^=REDRAW=$/{c++; next} c==1{n++} END{print n}' <<< "$frames")"
+  [ "$(sed -n 1p <<< "$ups")" -eq "$f1" ] || { echo "up $(sed -n 1p <<< "$ups") vs frame $f1"; return 1; }
+  [ "$(sed -n 2p <<< "$ups")" -eq "$f2" ] || { echo "up $(sed -n 2p <<< "$ups") vs frame $f2"; return 1; }
+  [ "$f1" -lt 20 ] && [ "$f2" -lt 20 ]
+}
+
+@test "menu: an unreadable manifest is reported once, not once per section" {
+  HAKPAK_TOOLSET="$BATS_TEST_TMPDIR/missing.txt" menu_keys 'q' --dry-run
+  [ "$(grep -c "can't read" <<< "$output")" -eq 1 ] || { echo "$output"; return 1; }
+  [[ "$output" == *"[ ] system"* ]]
+}
+
 @test "no sections and no terminal: asks for section names, reads nothing as keys" {
   run bash -c 'printf " \n" | bash "$1" --dry-run' _ "$REPO/install/setup.sh"
   [ "$status" -eq 2 ]

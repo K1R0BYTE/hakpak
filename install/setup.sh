@@ -76,50 +76,83 @@ if [ "${#wanted[@]}" -eq 0 ] && [ ! -t 0 ] && [ "${_HAKPAK_MENU_TTY:-0}" != 1 ];
   exit 2
 fi
 
-# The tools of one section from the Toolset manifest, as lines of names
-# indented under the section and wrapped to fit 79 columns.
-section_tool_lines() {
-  local indent="      " width=79 line="" name
-  while IFS=$'\t' read -r _ _ name _; do
-    if [ -n "$line" ] && [ $((${#line} + 1 + ${#name})) -gt "$width" ]; then
+# The terminal's size as "rows cols": LINES and COLUMNS if set, else the
+# terminal (when $1 is 1: stdout is one); 0 for an unknown or no limit.
+menu_term_size() {
+  local h="${LINES:-}" w="${COLUMNS:-}" size
+  if { [ -z "$h" ] || [ -z "$w" ]; } && [ "$1" = 1 ]; then
+    size="$(stty size 2>/dev/null < /dev/tty)" || size=""
+    [ -z "$h" ] && h="${size% *}"
+    [ -z "$w" ] && w="${size#* }"
+  fi
+  [[ "$h" =~ ^[0-9]+$ ]] || h=0
+  [[ "$w" =~ ^[0-9]+$ ]] || w=0
+  echo "$h $w"
+}
+
+# Wrap tool names (one per line on stdin) into lines indented under their
+# section, each at most width-1 columns so it never reaches the last column.
+wrap_tool_names() {
+  local width="$1" indent="      " line="" name
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    if [ -n "$line" ] && [ $((${#line} + 1 + ${#name})) -ge "$width" ]; then
       printf '%s\n' "$line"
       line=""
     fi
     if [ -z "$line" ]; then line="$indent$name"; else line="$line $name"; fi
-  done < <(toolset_rows "$1")
+  done
   [ -n "$line" ] && printf '%s\n' "$line"
   return 0
 }
 
 # The section menu: one checkbox per section, with the tools it installs
-# below it, read key by key from stdin. j/k or arrows move, space ticks,
-# a ticks or unticks all, Enter installs, q quits. Sets `wanted` to the
-# ticked ids; returns 1 if nothing is installed.
+# (from the Toolset manifest) below it, read key by key from stdin. When the
+# whole list is taller than the terminal, only the section under the cursor
+# shows its tools. j/k or arrows move, space ticks, a ticks or unticks all,
+# Enter installs, q quits. Sets `wanted` to the ticked ids; returns 1 if
+# nothing is installed.
 choose_sections() {
-  local ids=() names=() tools=() s i cur=0 key rest note="" drawn=0 lines
+  local ids=() names=() tools=() counts=() s i cur=0 key rest note="" lines=0
+  local height cols width=80 full all_rows section name t
   mapfile -t ids < <(section_ids)
   for s in "${HAKPAK_SECTIONS[@]}"; do names+=("${s#*:}"); done
-  local n=${#ids[@]} ticked=() t
-  lines=$((n + 3))
+  local n=${#ids[@]} ticked=() redraw=0
+  [ -t 1 ] && redraw=1
+  read -r height cols < <(menu_term_size "$redraw")
+  [ "${_HAKPAK_MENU_REDRAW:-0}" = 1 ] && redraw=1
+  [ "$cols" -gt 0 ] && [ "$cols" -lt "$width" ] && width=$cols
+  # One pass over the manifest; a problem with it is reported once.
+  all_rows="$(toolset_rows "")" || all_rows=""
+  full=$((n + 3))
   for ((i = 0; i < n; i++)); do
     ticked[i]=0
-    t="$(section_tool_lines "${ids[i]}")"
+    t="$(while IFS=$'\t' read -r section _ name _; do
+      [ "$section" = "${ids[i]}" ] && printf '%s\n' "$name"
+    done <<< "$all_rows" | wrap_tool_names "$width")"
     tools[i]="$t"
-    [ -n "$t" ] && lines=$((lines + $(grep -c '' <<< "$t")))
+    counts[i]=0
+    [ -n "$t" ] && counts[i]=$(($(printf '%s\n' "$t" | wc -l)))
+    full=$((full + counts[i]))
   done
+  local compact=0
+  [ "$height" -gt 0 ] && [ "$full" -ge "$height" ] && compact=1
   while true; do
     # On a terminal, draw over the last frame instead of below it.
-    if [ "$drawn" = 1 ] && { [ -t 1 ] || [ "${_HAKPAK_MENU_REDRAW:-0}" = 1 ]; }; then
+    if [ "$lines" -gt 0 ] && [ "$redraw" = 1 ]; then
       printf '\033[%dA\033[J' "$lines"
     fi
-    drawn=1
+    lines=$((n + 3))
     echo "Arrows or j/k move, space ticks, a ticks all, Enter installs, q quits"
     for ((i = 0; i < n; i++)); do
       local box="[ ]" mark=" "
       [ "${ticked[i]}" = 1 ] && box="[x]"
       [ "$i" = "$cur" ] && mark=">"
       printf '%s %s %-12s %s\n' "$mark" "$box" "${ids[i]}" "${names[i]}"
-      [ -n "${tools[i]}" ] && printf '%s\n' "${tools[i]}"
+      if [ -n "${tools[i]}" ] && { [ "$compact" = 0 ] || [ "$i" = "$cur" ]; }; then
+        printf '%s\n' "${tools[i]}"
+        lines=$((lines + counts[i]))
+      fi
     done
     echo
     echo "$note"
