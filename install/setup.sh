@@ -67,12 +67,22 @@ for arg in "$@"; do
   esac
 done
 
+[ "$all" = 1 ] && mapfile -t wanted < <(section_ids)
+
+# The menu needs a terminal: never read piped or redirected input as keys.
+if [ "${#wanted[@]}" -eq 0 ] && [ ! -t 0 ] && [ "${_HAKPAK_MENU_TTY:-0}" != 1 ]; then
+  echo "No terminal for the section menu: pass section names or all"
+  echo "valid sections: $(section_ids | paste -sd' ') all"
+  exit 2
+fi
+
 # The section menu: one checkbox per section, read key by key from stdin.
 # j/k or arrows move, space ticks, a ticks or unticks all, Enter installs,
 # q quits. Sets `wanted` to the ticked ids; returns 1 if nothing is installed.
 choose_sections() {
   local ids=() names=() s i cur=0 key rest note="" drawn=0 lines
-  for s in "${HAKPAK_SECTIONS[@]}"; do ids+=("${s%%:*}"); names+=("${s#*:}"); done
+  mapfile -t ids < <(section_ids)
+  for s in "${HAKPAK_SECTIONS[@]}"; do names+=("${s#*:}"); done
   local n=${#ids[@]} ticked=()
   for ((i = 0; i < n; i++)); do ticked[i]=0; done
   lines=$((n + 3))
@@ -80,7 +90,7 @@ choose_sections() {
     # On a terminal, draw over the last frame instead of below it.
     if [ "$drawn" = 1 ] && [ -t 1 ]; then printf '\033[%dA\033[J' "$lines"; fi
     drawn=1
-    echo "Choose sections: j/k or arrows move, space ticks, a all, Enter installs, q quits"
+    echo "Arrows or j/k move, space ticks, a ticks all, Enter installs, q quits"
     for ((i = 0; i < n; i++)); do
       local box="[ ]" mark=" "
       [ "${ticked[i]}" = 1 ] && box="[x]"
@@ -94,8 +104,8 @@ choose_sections() {
     if [ "$key" = $'\033' ]; then
       IFS= read -rsn2 -t 1 rest || true
       case "$rest" in
-        "[A") key=k ;;
-        "[B") key=j ;;
+        "[A" | OA) key=k ;;
+        "[B" | OB) key=j ;;
         *) continue ;;
       esac
     fi
@@ -135,14 +145,14 @@ if [ "${HAKPAK_DRY_RUN:-0}" = "1" ]; then
   log_ok "Dry run: nothing is installed or changed"
 fi
 
-if [ "$all" = 0 ] && [ "${#wanted[@]}" -eq 0 ]; then
+if [ "${#wanted[@]}" -eq 0 ]; then
   choose_sections || exit 1
 fi
 
 # Install order, whatever order the sections were named in; each runs once.
 selected=()
 while IFS= read -r id; do
-  if [ "$all" = 1 ] || _toolset_known "$id" "${wanted[@]}"; then
+  if _toolset_known "$id" "${wanted[@]}"; then
     selected+=("$id")
   fi
 done < <(section_ids)
