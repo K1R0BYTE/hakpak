@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# WSL section: WSL config and the xrdp remote desktop.
+# RDP section: the xrdp remote desktop, plus the WSL config it needs.
 # Tools are listed in install/toolset.txt.
 # shellcheck source=install/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
@@ -13,7 +13,7 @@ step 'wsl.conf' link_config wsl.conf /etc/wsl.conf
 # DNS and DHCP are left to WSL itself.
 
 # Remote GUI
-install_section wsl
+install_section rdp
 
 log 'Configuring xrdp on port 3390'
 # xrdp needs to read the TLS key in /etc/ssl/private
