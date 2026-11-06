@@ -237,3 +237,84 @@ no_real_calls() {
 @test "addrep.sh is gone" {
   [ ! -e "$REPO/install/addrep.sh" ]
 }
+
+# --- wsl.conf on WSL, whatever sections are chosen ---
+
+# Pretend to be WSL: the kernel release WSL reports.
+fake_wsl() {
+  mkdir -p "$HAKPAK_SYSROOT/proc/sys/kernel"
+  echo "${1:-6.6.87.2-microsoft-standard-WSL2}" > "$HAKPAK_SYSROOT/proc/sys/kernel/osrelease"
+}
+
+fake_linux() {
+  mkdir -p "$HAKPAK_SYSROOT/proc/sys/kernel"
+  echo "6.8.0-45-generic" > "$HAKPAK_SYSROOT/proc/sys/kernel/osrelease"
+}
+
+@test "on WSL, setup copies wsl.conf before the chosen sections, even without rdp" {
+  fake_wsl
+  export HAKPAK_DRY_RUN_LOG="$BATS_TEST_TMPDIR/dry.log"
+  setup_sh --dry-run web
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  grep -q "install -m 644 $REPO/configs/wsl.conf $HAKPAK_SYSROOT/etc/wsl.conf" "$HAKPAK_DRY_RUN_LOG"
+  [ "$(sections_run | paste -sd' ')" = "web" ]
+  [[ "$output" == *"wsl --shutdown"* ]] || { echo "$output"; return 1; }
+  # before the first section
+  [[ "${output%%== Section: web*}" == *"wsl.conf"* ]]
+  [ ! -e "$HAKPAK_SYSROOT/etc/wsl.conf" ]
+  no_real_calls
+}
+
+@test "WSL1 (Microsoft in the kernel release) counts as WSL too" {
+  fake_wsl "4.4.0-19041-Microsoft"
+  export HAKPAK_DRY_RUN_LOG="$BATS_TEST_TMPDIR/dry.log"
+  setup_sh --dry-run web
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  grep -q "$HAKPAK_SYSROOT/etc/wsl.conf" "$HAKPAK_DRY_RUN_LOG"
+}
+
+@test "on WSL, setup backs up an existing wsl.conf before replacing it" {
+  fake_wsl
+  mkdir -p "$HAKPAK_SYSROOT/etc"
+  echo mine > "$HAKPAK_SYSROOT/etc/wsl.conf"
+  export HAKPAK_DRY_RUN_LOG="$BATS_TEST_TMPDIR/dry.log"
+  setup_sh --dry-run web
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  grep -q "cp -p $HAKPAK_SYSROOT/etc/wsl.conf $HAKPAK_SYSROOT/etc/wsl.conf.bak" "$HAKPAK_DRY_RUN_LOG"
+  # the dry run changed nothing
+  [ "$(cat "$HAKPAK_SYSROOT/etc/wsl.conf")" = mine ]
+  [ ! -e "$HAKPAK_SYSROOT/etc/wsl.conf.bak" ]
+}
+
+@test "not on WSL, setup leaves wsl.conf alone" {
+  fake_linux
+  export HAKPAK_DRY_RUN_LOG="$BATS_TEST_TMPDIR/dry.log"
+  setup_sh --dry-run web
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  ! grep -q "wsl.conf" "$HAKPAK_DRY_RUN_LOG"
+  [[ "$output" != *"wsl --shutdown"* ]]
+}
+
+@test "on WSL, quitting the menu installs no wsl.conf" {
+  fake_wsl
+  export HAKPAK_DRY_RUN_LOG="$BATS_TEST_TMPDIR/dry.log"
+  : > "$HAKPAK_DRY_RUN_LOG"
+  menu_keys 'q' --dry-run
+  [ "$status" -ne 0 ]
+  ! grep -q "wsl.conf" "$HAKPAK_DRY_RUN_LOG"
+}
+
+@test "on WSL, a failed wsl.conf copy is reported and setup exits non-zero" {
+  fake_wsl
+  # a directory where the file should be: cmp fails, install fails
+  mkdir -p "$HAKPAK_SYSROOT/etc/wsl.conf/x"
+  export HAKPAK_ALLOW_ROOT=1
+  # one stubbed apt tool, so the web section runs nothing real
+  export HAKPAK_TOOLSET="$BATS_TEST_TMPDIR/toolset.txt"
+  printf 'web apt only-web\n' > "$HAKPAK_TOOLSET"
+  setup_sh web
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Failed sections: wsl.conf"* ]] || { echo "$output"; return 1; }
+  # the sections still ran
+  [ "$(sections_run | paste -sd' ')" = "web" ]
+}

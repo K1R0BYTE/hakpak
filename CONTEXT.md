@@ -6,7 +6,7 @@
 
 **Section**: one group of the Toolset, installed by one script in `install/`: System, Environment, Basic, Surfing, Web Tools, Pentest Tools, Cloud, CI/CD, MiTM, Wordlists, RDP.
 
-**Setup**: `install/setup.sh [section...|all] [--dry-run]`. No sections opens the section menu (checkboxes, read key by key; it needs a terminal, otherwise setup asks for section names); `all` installs every section; named sections install only those, always in install order. `--dry-run` turns on the Dry run. A failing section doesn't stop the next.
+**Setup**: `install/setup.sh [section...|all] [--dry-run]`. No sections opens the section menu (checkboxes, read key by key; it needs a terminal, otherwise setup asks for section names); `all` installs every section; named sections install only those, always in install order. `--dry-run` turns on the Dry run. A failing section doesn't stop the next. On WSL (detected from the kernel release), setup first installs `configs/wsl.conf` to `/etc/wsl.conf` with `link_config`, whatever sections are chosen; a failure there is listed with the failed sections.
 
 **Tool kind**: how a tool is installed. One of `apt`, `go`, `pipx`, `gem`, `git`, `venv`, `url`, `custom`. Every tool goes through `install_tool <kind> <name> …` in `install/lib.sh`. A `custom` tool names a function in `install/custom.sh`.
 

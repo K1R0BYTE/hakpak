@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# RDP section: the xrdp remote desktop, plus the WSL config it needs.
+# RDP section: the xrdp remote desktop, plus the WSL config it needs
+# (setup.sh installs it on WSL anyway; kept here so rdp.sh runs alone).
 # Tools are listed in install/toolset.txt.
 # shellcheck source=install/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"

@@ -38,8 +38,8 @@
 
 HAKPAK_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HAKPAK_OPT="${HAKPAK_OPT:-/opt}"
-# Prefix for /etc targets of link_config. Empty on a real install; tests
-# point it at a temp dir.
+# Prefix for system paths: /etc targets of link_config, and the /proc file
+# is_wsl reads. Empty on a real install; tests point it at a temp dir.
 HAKPAK_SYSROOT="${HAKPAK_SYSROOT:-}"
 export HAKPAK_ROOT HAKPAK_OPT HAKPAK_SYSROOT
 
@@ -284,6 +284,11 @@ _merge_history_into() {
     return 1
   fi
   chmod 600 "$tmp" && mv -f "$tmp" "$target"
+}
+
+# True on WSL (1 or 2, any distro): its kernel release names Microsoft.
+is_wsl() {
+  grep -qi microsoft "$HAKPAK_SYSROOT/proc/sys/kernel/osrelease" 2>/dev/null
 }
 
 has_command() {

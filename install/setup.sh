@@ -6,6 +6,7 @@
 #   setup.sh all                     every section, in install order
 #   setup.sh --dry-run [section...]  print what would run, change nothing
 #
+# On WSL, /etc/wsl.conf is installed first, whatever sections are chosen.
 # Each section is one script in install/ (see CONTEXT.md). A failing section
 # doesn't stop the next; setup lists the failed sections and exits non-zero.
 # shellcheck source=install/lib.sh
@@ -158,6 +159,17 @@ while IFS= read -r id; do
 done < <(section_ids)
 
 failed=()
+# On WSL, /etc/wsl.conf goes in whatever sections are chosen. link_config
+# backs up a file that is already there; an unchanged copy is left alone.
+if is_wsl; then
+  echo "== WSL config"
+  if step 'wsl.conf' link_config wsl.conf /etc/wsl.conf; then
+    log 'Run "wsl --shutdown" from Windows and reopen WSL to apply /etc/wsl.conf'
+  else
+    failed+=(wsl.conf)
+  fi
+fi
+
 for id in "${selected[@]}"; do
   echo "== Section: $id"
   bash "$HAKPAK_ROOT/install/$(section_script "$id")" || failed+=("$id")

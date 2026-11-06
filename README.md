@@ -36,6 +36,8 @@ bash setup.sh --help                 # the section names
 
 Sections: `system`, `environment`, `basic`, `surfing`, `web`, `pentest`, `cloud`, `cicd`, `mitm`, `wordlists`, `rdp`. If one fails, the rest still run and `setup.sh` lists the failed sections at the end.
 
+On WSL (any distro), `setup.sh` also puts `configs/wsl.conf` in `/etc/wsl.conf` before the sections, whichever ones you pick. An existing `/etc/wsl.conf` is backed up to `/etc/wsl.conf.bak` first. It turns on systemd and turns off Windows drive automount and interop, so `/mnt/c` and running Windows programs from WSL stop working. Run `wsl --shutdown` from Windows once after the install and reopen WSL to apply it. Outside WSL nothing changes.
+
 Run `setup.sh` as your normal user, not with sudo. Your user needs sudo rights; the scripts ask for your password only for the steps that need root (apt packages, `/usr/local`, `/etc`). Everything else installs as you: Go tools into `/opt/go`, pipx tools into `~/.local/bin`, and git tools into `/opt/<tool>`, owned by you.
 
 After the install, log out and back in once: that picks up your new shell (zsh), the PATH for Go and pipx tools, and the wireshark group.
@@ -188,7 +190,7 @@ Run it without `-i`/`-o` to pick the interfaces from a list. When 443 is redirec
 
 # RDP
 
-`/etc/wsl.conf` turns on systemd and turns off Windows drive automount and interop. Run `wsl --shutdown` from Windows once after the install, then reopen WSL: xrdp then starts with systemd. `startrdp` and `stoprdp` start and stop it by hand.
+`setup.sh` installs `/etc/wsl.conf` on WSL whatever sections you pick, and the `rdp` section installs it too when run on its own. It turns on systemd and turns off Windows drive automount and interop. Run `wsl --shutdown` from Windows once after the install, then reopen WSL: xrdp then starts with systemd. `startrdp` and `stoprdp` start and stop it by hand.
 
 # Tests
 
