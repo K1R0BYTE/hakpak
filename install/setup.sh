@@ -113,10 +113,9 @@ wrap_tool_names() {
 # Enter installs, q quits. Sets `wanted` to the ticked ids; returns 1 if
 # nothing is installed.
 choose_sections() {
-  local ids=() names=() tools=() counts=() s i cur=0 key rest note="" lines=0
+  local ids=() tools=() counts=() i cur=0 key rest note="" lines=0
   local height cols width=80 full all_rows section name t
   mapfile -t ids < <(section_ids)
-  for s in "${HAKPAK_SECTIONS[@]}"; do names+=("${s#*:}"); done
   local n=${#ids[@]} ticked=() redraw=0
   [ -t 1 ] && redraw=1
   read -r height cols < <(menu_term_size "$redraw")
@@ -148,7 +147,7 @@ choose_sections() {
       local box="[ ]" mark=" "
       [ "${ticked[i]}" = 1 ] && box="[x]"
       [ "$i" = "$cur" ] && mark=">"
-      printf '%s %s %-12s %s\n' "$mark" "$box" "${ids[i]}" "${names[i]}"
+      printf '%s %s %s\n' "$mark" "$box" "${ids[i]}"
       if [ -n "${tools[i]}" ] && { [ "$compact" = 0 ] || [ "$i" = "$cur" ]; }; then
         printf '%s\n' "${tools[i]}"
         lines=$((lines + counts[i]))

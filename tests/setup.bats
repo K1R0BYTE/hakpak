@@ -205,6 +205,13 @@ no_real_calls() {
   done < <(grep -E '^(Arrows|[> ] \[|      )' <<< "$output")
 }
 
+@test "menu: a section line shows the section id once, without its title" {
+  menu_keys 'q' --dry-run
+  [[ "$output" == *"> [ ] system"$'\n'* ]] || { echo "$output"; return 1; }
+  [[ "$output" == *"  [ ] web"$'\n'* ]] || { echo "$output"; return 1; }
+  [[ "$output" != *"Web Tools"* ]] || { echo "$output"; return 1; }
+}
+
 @test "menu: under each section it lists that section's tools from the manifest" {
   menu_keys 'q' --dry-run
   # The tools printed between one section line and the next.
