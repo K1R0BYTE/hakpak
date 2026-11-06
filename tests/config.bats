@@ -273,6 +273,9 @@ section() {
   cp "$REPO/configs/wsl.conf" "$HAKPAK_SYSROOT/etc/wsl.conf"
   section rdp.sh
   [[ "$output" != *"wsl section"* ]] || { echo "$output"; return 1; }
+  printf '[boot]\nsystemd = true\n' > "$HAKPAK_SYSROOT/etc/wsl.conf"
+  section rdp.sh
+  [[ "$output" != *"wsl section"* ]] || { echo "$output"; return 1; }
 }
 
 @test "wsl.conf turns on systemd and turns off automount and interop" {

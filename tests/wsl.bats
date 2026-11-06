@@ -39,9 +39,10 @@ answer() {
   run bash -c 'printf "$1" | _HAKPAK_PROMPT_TTY=1 bash "$2"' _ "$1" "$REPO/install/wsl.sh"
 }
 
-@test "wsl is a section, last in install order" {
+@test "wsl is a section, installed just before rdp" {
   source "$REPO/install/lib.sh"
-  [ "${HAKPAK_SECTIONS[-1]}" = "wsl:WSL config" ]
+  [ "${HAKPAK_SECTIONS[-2]}" = "wsl:WSL config" ]
+  [ "${HAKPAK_SECTIONS[-1]}" = "rdp:RDP" ]
 }
 
 @test "outside WSL, the wsl section changes nothing" {
@@ -188,4 +189,60 @@ answer() {
   mkdir -p "$T/x"
   HAKPAK_WSL_CONF=replace wsl_sh
   [ "$status" -ne 0 ]
+}
+
+@test "a bad HAKPAK_WSL_CONF outside WSL is ignored, since nothing is done" {
+  fake_linux
+  HAKPAK_WSL_CONF=yes wsl_sh
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+}
+
+@test "a symlinked wsl.conf with other content is shown and asked about too" {
+  fake_wsl
+  echo mine > "$BATS_TEST_TMPDIR/my-wsl.conf"
+  ln -s "$BATS_TEST_TMPDIR/my-wsl.conf" "$T"
+  wsl_sh
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [[ "$output" == *"-mine"* ]]
+  [ -L "$T" ]
+  [ "$(cat "$BATS_TEST_TMPDIR/my-wsl.conf")" = mine ]
+}
+
+@test "replacing a symlinked wsl.conf backs up what it pointed to" {
+  fake_wsl
+  echo mine > "$BATS_TEST_TMPDIR/my-wsl.conf"
+  ln -s "$BATS_TEST_TMPDIR/my-wsl.conf" "$T"
+  HAKPAK_WSL_CONF=replace wsl_sh
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [ ! -L "$T" ]
+  cmp -s "$OURS" "$T"
+  [ "$(cat "$T.bak")" = mine ]
+  [ ! -L "$T.bak" ]
+  [ "$(cat "$BATS_TEST_TMPDIR/my-wsl.conf")" = mine ]
+}
+
+@test "a wsl.conf that is not a file fails without a diff or a question" {
+  fake_wsl
+  mkdir -p "$T"
+  answer 'h\n'
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"not a file"* ]] || { echo "$output"; return 1; }
+  [[ "$output" != *"Keep yours"* ]]
+}
+
+@test "a successful install doesn't claim tools were installed" {
+  fake_wsl
+  wsl_sh
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"All tools installed"* ]]
+}
+
+@test "systemd = true with spaces, in [boot], counts as on" {
+  source "$REPO/install/lib.sh"
+  printf '[boot]\nsystemd = True\n' > "$BATS_TEST_TMPDIR/a"
+  wsl_conf_has_systemd "$BATS_TEST_TMPDIR/a"
+  printf '[network]\nsystemd=true\n' > "$BATS_TEST_TMPDIR/b"
+  if wsl_conf_has_systemd "$BATS_TEST_TMPDIR/b"; then return 1; fi
+  if wsl_conf_has_systemd "$BATS_TEST_TMPDIR/missing"; then return 1; fi
+  wsl_conf_has_systemd "$OURS"
 }

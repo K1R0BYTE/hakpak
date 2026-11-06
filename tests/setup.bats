@@ -33,7 +33,7 @@ menu_keys() {
   run bash -c 'printf "$1" | _HAKPAK_MENU_TTY=1 bash "$2" "${@:3}"' _ "$keys" "$REPO/install/setup.sh" "$@"
 }
 
-ALL="system environment basic surfing web pentest cloud cicd mitm wordlists rdp wsl"
+ALL="system environment basic surfing web pentest cloud cicd mitm wordlists wsl rdp"
 
 # Section ids setup.sh announced, in order, one per line.
 sections_run() {
@@ -72,7 +72,7 @@ no_real_calls() {
   setup_sh web nope --dry-run
   [ "$status" -ne 0 ]
   [[ "$output" == *"unknown section: nope"* ]]
-  for s in system environment basic surfing web pentest cloud cicd mitm wordlists rdp wsl; do
+  for s in system environment basic surfing web pentest cloud cicd mitm wordlists wsl rdp; do
     [[ "$output" == *"$s"* ]] || { echo "missing $s in: $output"; return 1; }
   done
   [ -z "$(sections_run)" ]
@@ -165,7 +165,7 @@ no_real_calls() {
   [ "$(sections_run | paste -sd' ')" = "system" ]
   menu_keys 'jjjjjjjjjjjjjjjjjjjj \n' --dry-run
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-  [ "$(sections_run | paste -sd' ')" = "wsl" ]
+  [ "$(sections_run | paste -sd' ')" = "rdp" ]
 }
 
 @test "menu: Enter with nothing ticked asks again instead of installing" {

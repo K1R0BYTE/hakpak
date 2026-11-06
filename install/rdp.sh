@@ -8,7 +8,7 @@ require_normal_user
 
 # xrdp starts with systemd, which /etc/wsl.conf turns on: that is the wsl
 # section's job.
-if is_wsl && ! grep -qs '^systemd=true' "$HAKPAK_SYSROOT/etc/wsl.conf"; then
+if is_wsl && ! wsl_conf_has_systemd "$HAKPAK_SYSROOT/etc/wsl.conf"; then
   log 'systemd is off in /etc/wsl.conf: install the wsl section too, so xrdp starts at boot'
 fi
 

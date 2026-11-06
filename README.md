@@ -34,7 +34,7 @@ bash setup.sh --dry-run all          # everything, without installing
 bash setup.sh --help                 # the section names
 ```
 
-Sections: `system`, `environment`, `basic`, `surfing`, `web`, `pentest`, `cloud`, `cicd`, `mitm`, `wordlists`, `rdp`, `wsl`. If one fails, the rest still run and `setup.sh` lists the failed sections at the end.
+Sections: `system`, `environment`, `basic`, `surfing`, `web`, `pentest`, `cloud`, `cicd`, `mitm`, `wordlists`, `wsl`, `rdp`. If one fails, the rest still run and `setup.sh` lists the failed sections at the end.
 
 Run `setup.sh` as your normal user, not with sudo. Your user needs sudo rights; the scripts ask for your password only for the steps that need root (apt packages, `/usr/local`, `/etc`). Everything else installs as you: Go tools into `/opt/go`, pipx tools into `~/.local/bin`, and git tools into `/opt/<tool>`, owned by you.
 
@@ -188,7 +188,7 @@ Run it without `-i`/`-o` to pick the interfaces from a list. When 443 is redirec
 
 # RDP
 
-The `wsl` section installs only `/etc/wsl.conf`, and the menu ticks it by default on WSL (outside WSL it does nothing). hakpak's `wsl.conf` turns on systemd and turns off Windows drive automount (`/mnt/c`) and interop (running `.exe` files). If you already have a different `/etc/wsl.conf`, setup shows the difference, recommends one, and asks which to keep (`k` or `h`; Enter takes the recommendation). Replacing yours backs it up to `/etc/wsl.conf.bak`, an identical file is never rewritten, and without a terminal yours is kept: set `HAKPAK_WSL_CONF=keep` or `replace` to decide up front. Run `wsl --shutdown` from Windows once after the install, then reopen WSL: xrdp (the `rdp` section) then starts with systemd. `startrdp` and `stoprdp` start and stop it by hand.
+The `wsl` section installs only `/etc/wsl.conf`, and the menu ticks it by default on WSL (outside WSL it does nothing). hakpak's `wsl.conf` turns on systemd and turns off Windows drive automount (`/mnt/c`) and interop (running `.exe` files). If you already have a different `/etc/wsl.conf`, setup shows the difference, recommends one, and asks which to keep (`k` or `h`; Enter takes the recommendation). Replacing yours backs it up to `/etc/wsl.conf.bak` (or `.bak.<timestamp>` if that is taken), an identical file is never rewritten, and without a terminal yours is kept: set `HAKPAK_WSL_CONF=keep` or `replace` to decide up front. Run `wsl --shutdown` from Windows once after the install, then reopen WSL: xrdp (the `rdp` section) then starts with systemd. `startrdp` and `stoprdp` start and stop it by hand.
 
 # Tests
 

@@ -217,9 +217,14 @@ link_config() {
   _run_at "$target" ln -sfn "$src" "$target"
 }
 
+# True if target is a real file (not a link) with the same content as src.
+config_up_to_date() {
+  [ -f "$2" ] && [ ! -L "$2" ] && cmp -s "$1" "$2"
+}
+
 _copy_config() {
   local src="$1" target="$2"
-  if [ -f "$target" ] && [ ! -L "$target" ] && cmp -s "$src" "$target"; then
+  if config_up_to_date "$src" "$target"; then
     log_ok "$target already up to date"
     return 0
   fi
@@ -291,6 +296,16 @@ _merge_history_into() {
 is_wsl() {
   grep -qi microsoft "$HAKPAK_SYSROOT/proc/sys/kernel/osrelease" 2>/dev/null ||
     [ -e "$HAKPAK_SYSROOT/proc/sys/fs/binfmt_misc/WSLInterop" ]
+}
+
+# True if a wsl.conf turns on systemd: systemd=true under [boot], any case,
+# spaces around the = allowed. False for a missing file.
+wsl_conf_has_systemd() {
+  awk '
+    /^[[:space:]]*\[/ { boot = (tolower($0) ~ /^[[:space:]]*\[boot\][[:space:]]*$/); next }
+    boot && tolower($0) ~ /^[[:space:]]*systemd[[:space:]]*=[[:space:]]*true[[:space:]]*$/ { on = 1 }
+    END { exit !on }
+  ' "$1" 2>/dev/null
 }
 
 has_command() {

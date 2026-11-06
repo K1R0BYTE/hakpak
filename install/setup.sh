@@ -24,8 +24,8 @@ section_script() {
     cicd) echo cicd.sh ;;
     mitm) echo mitm.sh ;;
     wordlists) echo wordlists.sh ;;
-    rdp) echo rdp.sh ;;
     wsl) echo wsl.sh ;;
+    rdp) echo rdp.sh ;;
     *) return 1 ;;
   esac
 }
