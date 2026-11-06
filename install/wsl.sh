@@ -31,6 +31,35 @@ if config_up_to_date "$ours" "$target"; then
   exit 0
 fi
 
+# Show yours ($1) against hakpak's ($2) as a unified diff, with a legend.
+# On a terminal, lines only in yours are red, only in hakpak's green, and
+# hunk headers cyan; NO_COLOR turns that off. The -/+ markers carry the
+# meaning either way.
+show_wsl_conf_diff() {
+  local red="" green="" cyan="" off="" rw="" gw="" n=0 line
+  if { [ -t 1 ] || [ "${_HAKPAK_COLOR:-0}" = 1 ]; } && [ -n "$_NOCOLOR" ]; then
+    red="$(printf '%b' "$_RED")" green="$(printf '%b' "$_GREEN")"
+    off="$(printf '%b' "$_NOCOLOR")" cyan=$'\e[36m' rw=" red:" gw=" green:"
+  fi
+  echo "  ${red}-${rw} only in yours${off}"
+  echo "  ${green}+${gw} only in hakpak's${off}"
+  diff -u --label "/etc/wsl.conf (yours)" --label "configs/wsl.conf (hakpak)" "$1" "$2" |
+    while IFS= read -r line; do
+      n=$((n + 1))
+      # The first two lines name the files; after that -/+ mark lines.
+      if [ "$n" -le 2 ]; then
+        printf '%s\n' "$line"
+        continue
+      fi
+      case "$line" in
+        "@@"*) printf '%s%s%s\n' "$cyan" "$line" "$off" ;;
+        -*) printf '%s%s%s\n' "$red" "$line" "$off" ;;
+        +*) printf '%s%s%s\n' "$green" "$line" "$off" ;;
+        *) printf '%s\n' "$line" ;;
+      esac
+    done
+}
+
 # Ask which wsl.conf to keep; prints keep or replace. $1 is the
 # recommendation, taken on Enter. End of input keeps yours.
 choose_wsl_conf() {
@@ -67,8 +96,12 @@ if [ "$mine" = 1 ]; then
     echo "/etc/wsl.conf is not a file: move it away, then run the wsl section again"
     exit 1
   fi
+  if [ ! -r "$target" ]; then
+    echo "Can't read /etc/wsl.conf to compare it: make it readable (it is usually mode 644)"
+    exit 1
+  fi
   echo "Your /etc/wsl.conf differs from hakpak's:"
-  diff -u --label "/etc/wsl.conf (yours)" --label "configs/wsl.conf (hakpak)" "$target" "$ours"
+  show_wsl_conf_diff "$target" "$ours"
   echo "hakpak's turns on systemd (xrdp in the rdp section starts with it) and"
   echo "turns off Windows drive automount (/mnt/c) and interop (running .exe files)."
   if wsl_conf_has_systemd "$target"; then
