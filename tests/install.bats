@@ -53,6 +53,26 @@ not_recorded() {
   [ "$GOPATH" = "$HAKPAK_OPT/go" ]
 }
 
+@test "go makes GOPATH with sudo and hands it to you when /opt isn't writable" {
+  [ "$(id -u)" -ne 0 ] || skip "root can write anywhere"
+  mkdir -p "$BATS_TEST_TMPDIR/ro"
+  chmod 555 "$BATS_TEST_TMPDIR/ro"
+  export HAKPAK_OPT="$BATS_TEST_TMPDIR/ro"
+  lib
+  install_tool go nuclei github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+  mkdir_line="$(grep -nF -- "sudo mkdir -p $HAKPAK_OPT/go" "$HAKPAK_DRY_RUN_LOG" | cut -d: -f1)"
+  chown_line="$(grep -nF -- "sudo chown $(id -un):$(id -gn) $HAKPAK_OPT/go" "$HAKPAK_DRY_RUN_LOG" | cut -d: -f1)"
+  go_line="$(grep -nF -- "go install -v" "$HAKPAK_DRY_RUN_LOG" | cut -d: -f1)"
+  [ -n "$mkdir_line" ] && [ -n "$chown_line" ] && [ -n "$go_line" ] || { cat "$HAKPAK_DRY_RUN_LOG"; return 1; }
+  [ "$mkdir_line" -lt "$chown_line" ] && [ "$chown_line" -lt "$go_line" ]
+}
+
+@test "go doesn't use sudo when GOPATH is already writable" {
+  lib
+  install_tool go nuclei github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+  not_recorded "sudo"
+}
+
 @test "go skips a tool whose binary is already in GOPATH/bin" {
   mkdir -p "$HAKPAK_OPT/go/bin"
   touch "$HAKPAK_OPT/go/bin/ffuf"; chmod +x "$HAKPAK_OPT/go/bin/ffuf"
