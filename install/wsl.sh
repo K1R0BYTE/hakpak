@@ -31,6 +31,33 @@ if config_up_to_date "$ours" "$target"; then
   exit 0
 fi
 
+# Show yours ($1) against hakpak's ($2) as a unified diff: lines only in
+# yours red, only in hakpak's green, hunk headers cyan, with a legend.
+# NO_COLOR (any value) turns colors off; the -/+ markers carry the meaning.
+show_wsl_conf_diff() {
+  local red="" green="" cyan="" off=""
+  if [ -z "${NO_COLOR+x}" ]; then
+    red=$'\e[1;31m' green=$'\e[1;32m' cyan=$'\e[36m' off=$'\e[0m'
+  fi
+  if [ -n "$red" ]; then
+    echo "  ${red}- red: only in yours${off}"
+    echo "  ${green}+ green: only in hakpak's${off}"
+  else
+    echo "  - only in yours"
+    echo "  + only in hakpak's"
+  fi
+  diff -u --label "/etc/wsl.conf (yours)" --label "configs/wsl.conf (hakpak)" "$1" "$2" |
+    while IFS= read -r line; do
+      case "$line" in
+        "--- "* | "+++ "*) printf '%s\n' "$line" ;;
+        "@@"*) printf '%s%s%s\n' "$cyan" "$line" "$off" ;;
+        -*) printf '%s%s%s\n' "$red" "$line" "$off" ;;
+        +*) printf '%s%s%s\n' "$green" "$line" "$off" ;;
+        *) printf '%s\n' "$line" ;;
+      esac
+    done
+}
+
 # Ask which wsl.conf to keep; prints keep or replace. $1 is the
 # recommendation, taken on Enter. End of input keeps yours.
 choose_wsl_conf() {
@@ -68,7 +95,7 @@ if [ "$mine" = 1 ]; then
     exit 1
   fi
   echo "Your /etc/wsl.conf differs from hakpak's:"
-  diff -u --label "/etc/wsl.conf (yours)" --label "configs/wsl.conf (hakpak)" "$target" "$ours"
+  show_wsl_conf_diff "$target" "$ours"
   echo "hakpak's turns on systemd (xrdp in the rdp section starts with it) and"
   echo "turns off Windows drive automount (/mnt/c) and interop (running .exe files)."
   if wsl_conf_has_systemd "$target"; then

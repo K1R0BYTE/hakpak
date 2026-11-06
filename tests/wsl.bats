@@ -246,3 +246,42 @@ answer() {
   if wsl_conf_has_systemd "$BATS_TEST_TMPDIR/missing"; then return 1; fi
   wsl_conf_has_systemd "$OURS"
 }
+
+# --- colored difference ---
+
+RED=$'\e[1;31m' GREEN=$'\e[1;32m' CYAN=$'\e[36m' OFF=$'\e[0m'
+
+@test "the difference is colored: yours red, hakpak's green, hunks cyan" {
+  fake_wsl
+  printf '[boot]\nsystemd=true\n[automount]\nenabled=true\n' > "$T"
+  wsl_sh
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [[ "$output" == *"${RED}-enabled=true${OFF}"* ]] || { echo "$output" | cat -v; return 1; }
+  [[ "$output" == *"${GREEN}+enabled=false${OFF}"* ]]
+  [[ "$output" == *"${CYAN}@@"* ]]
+  # file headers and unchanged lines stay plain
+  grep -qx -- '--- /etc/wsl.conf (yours)' <<< "$output"
+  grep -qx -- '+++ configs/wsl.conf (hakpak)' <<< "$output"
+  grep -qx ' systemd=true' <<< "$output"
+}
+
+@test "a legend names the colors" {
+  fake_wsl
+  echo mine > "$T"
+  wsl_sh
+  [[ "$output" == *"${RED}- red: only in yours${OFF}"* ]] || { echo "$output" | cat -v; return 1; }
+  [[ "$output" == *"${GREEN}+ green: only in hakpak's${OFF}"* ]]
+}
+
+@test "NO_COLOR turns the colors off but keeps the markers" {
+  fake_wsl
+  printf '[automount]\nenabled=true\n' > "$T"
+  NO_COLOR=1 wsl_sh
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  diff_part="$(sed -n '/differs from/,/Recommended/p' <<< "$output")"
+  [[ "$diff_part" != *$'\e'* ]] || { echo "$diff_part" | cat -v; return 1; }
+  grep -qx -- '-enabled=true' <<< "$output"
+  grep -qx -- '+enabled=false' <<< "$output"
+  grep -qx -- '- red: only in yours' <<< "$output" && return 1
+  grep -q -- 'only in yours' <<< "$output"
+}
