@@ -32,7 +32,7 @@ bash setup.sh --dry-run              # everything, without installing
 bash setup.sh --help                 # the section names
 ```
 
-Sections: `system`, `environment`, `basic`, `surfing`, `web`, `pentest`, `cloud`, `cicd`, `mitm`, `wordlists`, `wsl`. If one fails, the rest still run and `setup.sh` lists the failed sections at the end.
+Sections: `system`, `environment`, `basic`, `surfing`, `web`, `pentest`, `cloud`, `cicd`, `mitm`, `wordlists`, `rdp`. If one fails, the rest still run and `setup.sh` lists the failed sections at the end.
 
 Run `setup.sh` as your normal user, not with sudo. Your user needs sudo rights; the scripts ask for your password only for the steps that need root (apt packages, `/usr/local`, `/etc`). Everything else installs as you: Go tools into `/opt/go`, pipx tools into `~/.local/bin`, and git tools into `/opt/<tool>`, owned by you.
 
@@ -156,7 +156,7 @@ Every tool is one row in [`install/toolset.txt`](install/toolset.txt): its secti
 
 * seclists (git)
 
-## WSL
+## RDP
 
 * xfce4 (apt)
 * xrdp (apt): remote desktop on port 3390
@@ -184,7 +184,7 @@ mitmproxy --mode transparent --showhost
 
 Run it without `-i`/`-o` to pick the interfaces from a list. When 443 is redirected, QUIC (UDP 443) is blocked so browsers fall back to TCP through the proxy. If any step fails, setup-router undoes what it did. `setup-router --help` shows every option.
 
-# WSL
+# RDP
 
 `/etc/wsl.conf` turns on systemd and turns off Windows drive automount and interop. Run `wsl --shutdown` from Windows once after the install, then reopen WSL: xrdp then starts with systemd. `startrdp` and `stoprdp` start and stop it by hand.
 

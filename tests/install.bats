@@ -190,7 +190,7 @@ section() {
 }
 
 @test "every section script runs cleanly in dry run" {
-  for s in system.sh enviroment.sh basic.sh surfing.sh web-soft.sh pentest-soft.sh cloud.sh cicd.sh mitm.sh wordlists.sh wsl.sh; do
+  for s in system.sh enviroment.sh basic.sh surfing.sh web-soft.sh pentest-soft.sh cloud.sh cicd.sh mitm.sh wordlists.sh rdp.sh; do
     : > "$HAKPAK_DRY_RUN_LOG"
     section "$s"
     [ "$status" -eq 0 ] || { echo "$s failed: $output"; return 1; }
@@ -228,12 +228,12 @@ section() {
 
 @test "section scripts don't call apt, go, pip or git directly" {
   run grep -nE '^\s*(sudo )?(apt|apt-get|go|pip3?|git) ' \
-    "$REPO"/install/{system,enviroment,basic,surfing,web-soft,pentest-soft,cloud,cicd,mitm,wordlists,wsl}.sh
+    "$REPO"/install/{system,enviroment,basic,surfing,web-soft,pentest-soft,cloud,cicd,mitm,wordlists,rdp}.sh
   [ "$status" -ne 0 ] || { echo "$output"; return 1; }
 }
 
 @test "section scripts don't define their own logger" {
-  run grep -n 'colorecho()' "$REPO"/install/{system,enviroment,basic,surfing,web-soft,pentest-soft,cloud,cicd,mitm,wordlists,wsl}.sh
+  run grep -n 'colorecho()' "$REPO"/install/{system,enviroment,basic,surfing,web-soft,pentest-soft,cloud,cicd,mitm,wordlists,rdp}.sh
   [ "$status" -ne 0 ]
 }
 
@@ -343,8 +343,8 @@ section() {
   not_recorded "chown -R"
 }
 
-@test "wsl section leaves DNS and DHCP to WSL itself" {
-  section wsl.sh
+@test "rdp section leaves DNS and DHCP to WSL itself" {
+  section rdp.sh
   not_recorded "dnsmasq"
   not_recorded "dhcp"
   [ ! -e "$REPO/configs/dnsmasq.conf" ]
@@ -352,8 +352,8 @@ section() {
   ! grep -q 'dhcp' "$REPO/system/.alias"
 }
 
-@test "wsl section lets xrdp read its TLS key" {
-  section wsl.sh
+@test "rdp section lets xrdp read its TLS key" {
+  section rdp.sh
   recorded "adduser xrdp ssl-cert"
 }
 
@@ -379,7 +379,7 @@ section() {
 }
 
 @test "every section script checks it isn't run as root" {
-  for s in system enviroment basic surfing web-soft pentest-soft cloud cicd mitm wordlists wsl; do
+  for s in system enviroment basic surfing web-soft pentest-soft cloud cicd mitm wordlists rdp; do
     grep -q '^require_normal_user' "$REPO/install/$s.sh" || { echo "$s.sh"; return 1; }
   done
 }
