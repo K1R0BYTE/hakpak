@@ -15,7 +15,7 @@ setup() {
   REAL_CALLS="$BATS_TEST_TMPDIR/real-calls.log"
   mkdir -p "$STUBS"
   : > "$REAL_CALLS"
-  for c in sudo apt apt-get go pipx gem git curl wget pip pip3 chsh systemctl; do
+  for c in sudo apt apt-get go pipx gem git curl wget pip pip3 chsh usermod systemctl; do
     printf '#!/bin/sh\necho "%s $*" >> "%s"\nexit 1\n' "$c" "$REAL_CALLS" > "$STUBS/$c"
     chmod +x "$STUBS/$c"
   done

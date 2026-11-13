@@ -380,14 +380,14 @@ STUB
   unset USER
   _login_shell() { echo /bin/bash; }
   install_tool custom oh-my-zsh _install_oh_my_zsh
-  grep -qE "^sudo chsh -s [^ ]*zsh $(id -un)\$" "$HAKPAK_DRY_RUN_LOG"
+  grep -qE "^sudo usermod -s [^ ]*zsh $(id -un)\$" "$HAKPAK_DRY_RUN_LOG"
 }
 
 @test "oh-my-zsh leaves the login shell alone when it is already zsh" {
   lib
   _login_shell() { echo /usr/bin/zsh; }
   install_tool custom oh-my-zsh _install_oh_my_zsh
-  not_recorded "chsh"
+  not_recorded "usermod"
 }
 
 @test "an installed oh-my-zsh still gets the login shell changed on a re-run" {
@@ -396,19 +396,26 @@ STUB
   _login_shell() { echo /bin/bash; }
   install_tool custom oh-my-zsh _install_oh_my_zsh
   not_recorded "ohmyzsh.git"
-  recorded "sudo chsh -s"
+  recorded "sudo usermod -s"
 }
 
-@test "a failed chsh warns with the manual command and doesn't fail oh-my-zsh" {
+@test "a failed shell change warns with the manual command and doesn't fail oh-my-zsh" {
   lib
   _login_shell() { echo /bin/bash; }
   run_step() {
-    case "$*" in *chsh*) return 1 ;; esac
+    case "$*" in *usermod*) return 1 ;; esac
     echo "$*" >> "$HAKPAK_DRY_RUN_LOG"
   }
   run install_tool custom oh-my-zsh _install_oh_my_zsh
   [ "$status" -eq 0 ]
-  [[ "$output" == *"sudo chsh -s"*"$(id -un)"* ]]
+  [[ "$output" == *"sudo usermod -s"*"$(id -un)"* ]]
   [[ "$output" != *"failed: oh-my-zsh"* ]]
   recorded "zsh-autosuggestions"
+}
+
+@test "the login shell is never changed with chsh, which can ask for a password even under sudo" {
+  lib
+  _login_shell() { echo /bin/bash; }
+  install_tool custom oh-my-zsh _install_oh_my_zsh
+  not_recorded "chsh"
 }

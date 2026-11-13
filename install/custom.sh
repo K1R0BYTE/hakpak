@@ -56,17 +56,20 @@ _login_shell() {
 
 # Make zsh your login shell unless it already is. The name comes from
 # `id -un`, not $USER: only a login sets $USER, so a container or sandbox
-# shell can have it empty. A shell that can't be changed is a warning, not a
-# failed tool, and the next run tries again.
+# shell can have it empty. The change is made with usermod, not chsh: chsh
+# authenticates through PAM even under sudo, and asks for a password when
+# root's own shell isn't in /etc/shells (nologin, as in some containers and
+# sandboxes). A shell that can't be changed is a warning, not a failed tool,
+# and the next run tries again.
 _use_zsh_as_login_shell() {
   local user zsh
   user="$(id -un 2>/dev/null)"
   zsh="$(command -v zsh || echo /usr/bin/zsh)"
   if [ -n "$user" ]; then
     case "$(_login_shell "$user")" in */zsh) return 0 ;; esac
-    run_step sudo chsh -s "$zsh" "$user" && return 0
+    run_step sudo usermod -s "$zsh" "$user" && return 0
   fi
-  log "Couldn't make zsh your login shell. To do it yourself: sudo chsh -s $zsh ${user:-<your user>}"
+  log "Couldn't make zsh your login shell. To do it yourself: sudo usermod -s $zsh ${user:-<your user>}"
   return 0
 }
 
