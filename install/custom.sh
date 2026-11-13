@@ -49,6 +49,27 @@ _install_go_toolchain() {
 
 # --- Basic ---
 
+# A user's login shell, from the passwd database. Empty when there is no entry.
+_login_shell() {
+  getent passwd "$1" 2>/dev/null | cut -d: -f7
+}
+
+# Make zsh your login shell unless it already is. The name comes from
+# `id -un`, not $USER: only a login sets $USER, so a container or sandbox
+# shell can have it empty. A shell that can't be changed is a warning, not a
+# failed tool, and the next run tries again.
+_use_zsh_as_login_shell() {
+  local user zsh
+  user="$(id -un 2>/dev/null)"
+  zsh="$(command -v zsh || echo /usr/bin/zsh)"
+  if [ -n "$user" ]; then
+    case "$(_login_shell "$user")" in */zsh) return 0 ;; esac
+    run_step sudo chsh -s "$zsh" "$user" && return 0
+  fi
+  log "Couldn't make zsh your login shell. To do it yourself: sudo chsh -s $zsh ${user:-<your user>}"
+  return 0
+}
+
 # Plugins go inside oh-my-zsh, so they're cloned only once it's there.
 _install_oh_my_zsh() {
   local zsh_dir="${HOME}/.oh-my-zsh"
@@ -56,10 +77,9 @@ _install_oh_my_zsh() {
   if [ -f "$zsh_dir/oh-my-zsh.sh" ]; then
     log_ok "oh-my-zsh already installed"
   else
-    run_step git clone --depth 1 https://github.com/ohmyzsh/ohmyzsh.git "$zsh_dir" &&
-      run_step sudo chsh -s "$(command -v zsh || echo /usr/bin/zsh)" "$USER" ||
-      return 1
+    run_step git clone --depth 1 https://github.com/ohmyzsh/ohmyzsh.git "$zsh_dir" || return 1
   fi
+  _use_zsh_as_login_shell
   # Each plugin is its own tool, so a failed clone is reported by its name.
   install_tool git zsh-syntax-highlighting https://github.com/zsh-users/zsh-syntax-highlighting.git "$plugins/zsh-syntax-highlighting"
   install_tool git zsh-autosuggestions https://github.com/zsh-users/zsh-autosuggestions "$plugins/zsh-autosuggestions"
