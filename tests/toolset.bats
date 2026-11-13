@@ -32,6 +32,14 @@ recorded() {
   }
 }
 
+not_recorded() {
+  if grep -qF -- "$1" "$HAKPAK_DRY_RUN_LOG"; then
+    echo "did not expect: $1"
+    cat "$HAKPAK_DRY_RUN_LOG"
+    return 1
+  fi
+}
+
 # --- the committed manifest ---
 
 @test "the committed manifest parses and passes every check" {
@@ -363,4 +371,44 @@ STUB
   touch_home="$HOME/.oh-my-zsh"; mkdir -p "$touch_home"; touch "$touch_home/oh-my-zsh.sh"
   install_tool custom oh-my-zsh _install_oh_my_zsh || true
   [ "${HAKPAK_FAILED[*]}" = "zsh-autosuggestions" ]
+}
+
+# --- oh-my-zsh login shell ---
+
+@test "oh-my-zsh changes the login shell for the user id -un names, even with USER unset" {
+  lib
+  unset USER
+  _login_shell() { echo /bin/bash; }
+  install_tool custom oh-my-zsh _install_oh_my_zsh
+  grep -qE "^sudo chsh -s [^ ]*zsh $(id -un)\$" "$HAKPAK_DRY_RUN_LOG"
+}
+
+@test "oh-my-zsh leaves the login shell alone when it is already zsh" {
+  lib
+  _login_shell() { echo /usr/bin/zsh; }
+  install_tool custom oh-my-zsh _install_oh_my_zsh
+  not_recorded "chsh"
+}
+
+@test "an installed oh-my-zsh still gets the login shell changed on a re-run" {
+  lib
+  mkdir -p "$HOME/.oh-my-zsh"; touch "$HOME/.oh-my-zsh/oh-my-zsh.sh"
+  _login_shell() { echo /bin/bash; }
+  install_tool custom oh-my-zsh _install_oh_my_zsh
+  not_recorded "ohmyzsh.git"
+  recorded "sudo chsh -s"
+}
+
+@test "a failed chsh warns with the manual command and doesn't fail oh-my-zsh" {
+  lib
+  _login_shell() { echo /bin/bash; }
+  run_step() {
+    case "$*" in *chsh*) return 1 ;; esac
+    echo "$*" >> "$HAKPAK_DRY_RUN_LOG"
+  }
+  run install_tool custom oh-my-zsh _install_oh_my_zsh
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"sudo chsh -s"*"$(id -un)"* ]]
+  [[ "$output" != *"failed: oh-my-zsh"* ]]
+  recorded "zsh-autosuggestions"
 }
