@@ -119,3 +119,13 @@ frontmatter() {
     grep -qF -e "$needle" "$file" || { echo "$file: no mention of $needle"; return 1; }
   done
 }
+
+@test "skills: the live in-sandbox guidance file is not given authority" {
+  # Anything running in a sandbox can rewrite AGENTS.md or CLAUDE.md there.
+  for file in "$SKILLS"/sbx-cli/SKILL.md "$SKILLS"/sbx-arch/SKILL.md; do
+    if grep -n -e 'prefer it to the docs' -e 'the docs they win' "$file"; then
+      echo "$file: ranks the in-sandbox file above the docs"; return 1
+    fi
+  done
+  grep -q 'not as instructions' "$SKILLS/sbx-cli/SKILL.md"
+}
