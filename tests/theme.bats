@@ -191,6 +191,16 @@ EOF
   done
 }
 
+@test "a theme without a tmux status bar of its own gets the neon one" {
+  cp -r "$REPO/tools" "$REPO/configs" "$BATS_TEST_TMPDIR/"
+  cp "$BATS_TEST_TMPDIR/configs/starship/neon.toml" "$BATS_TEST_TMPDIR/configs/starship/extra.toml"
+  "$BATS_TEST_TMPDIR/tools/hakpak-theme" extra
+  run "$BATS_TEST_TMPDIR/tools/hakpak-theme" --path tmux
+  [ "$output" = "$BATS_TEST_TMPDIR/configs/tmux/themes/neon.conf" ] || { echo "$output"; return 1; }
+  run "$BATS_TEST_TMPDIR/tools/hakpak-theme" --path starship
+  [ "$output" = "$BATS_TEST_TMPDIR/configs/starship/extra.toml" ]
+}
+
 @test "switching reloads the tmux status bar when a tmux server is running" {
   "$THEME" powerline
   grep -qF "tmux source-file $REPO/configs/tmux/themes/powerline.conf" "$BATS_TEST_TMPDIR/tmux.log"

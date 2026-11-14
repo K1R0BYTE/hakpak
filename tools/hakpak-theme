@@ -92,7 +92,12 @@ case "$1" in
   --path)
     case "${2-}" in
       starship) echo "$PROMPTS/$(current).toml" ;;
-      tmux) echo "$BARS/$(current).conf" ;;
+      tmux)
+        # A theme without a status bar of its own gets the default one.
+        bar="$BARS/$(current).conf"
+        [ -f "$bar" ] || bar="$BARS/$DEFAULT.conf"
+        echo "$bar"
+        ;;
       *) usage >&2; exit 2 ;;
     esac
     ;;
