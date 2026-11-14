@@ -2,7 +2,7 @@
 #
 #   section  kind  name  [source...]  # note shown in the README
 #
-# Sections: top dev system environment basic surfing web pentest cloud cicd mitm wordlists rdp
+# Sections: top dev network environment basic surfing web pentest cloud cicd mitm wordlists rdp
 # Kinds (see install/lib.sh): apt go pipx gem git venv url uv plugin custom
 #   uv: `uv tool install`; the source is the package, when its name differs
 #   plugin: a Claude Code plugin; the source is its marketplace
@@ -63,11 +63,11 @@ dev  plugin  differential-review     trailofbits  # security review of a diff
 dev  plugin  security-audit          hakpak       # Cloudflare's security-audit-skill
 dev  git     claude-code-config  https://github.com/trailofbits/claude-code-config  $HAKPAK_OPT/claude-code-config  # Trail of Bits' Claude Code config; run claude there and /trailofbits:config
 
-# --- System ---
-system  apt  net-tools
-system  apt  bind9-dnsutils
-system  apt  nfs-common
-system  apt  cifs-utils
+# --- Network ---
+network  apt  net-tools
+network  apt  bind9-dnsutils
+network  apt  nfs-common
+network  apt  cifs-utils
 
 # --- Environment ---
 environment  apt     python3-pip

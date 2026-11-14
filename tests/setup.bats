@@ -33,7 +33,7 @@ menu_keys() {
   run bash -c 'printf "$1" | _HAKPAK_MENU_TTY=1 bash "$2" "${@:3}"' _ "$keys" "$REPO/install/setup.sh" "$@"
 }
 
-ALL="top dev system environment basic surfing web pentest cloud cicd mitm wordlists wsl rdp"
+ALL="top dev network environment basic surfing web pentest cloud cicd mitm wordlists wsl rdp"
 
 # Section ids setup.sh announced, in order, one per line.
 sections_run() {
@@ -141,13 +141,13 @@ no_real_calls() {
 @test "menu: arrow keys move the cursor" {
   menu_keys '\033[B\033[B\033[B \033[A \n' --dry-run
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-  [ "$(sections_run | paste -sd' ')" = "system environment" ]
+  [ "$(sections_run | paste -sd' ')" = "network environment" ]
 }
 
 @test "menu: space again unticks" {
   menu_keys '  jj \n' --dry-run
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-  [ "$(sections_run | paste -sd' ')" = "system" ]
+  [ "$(sections_run | paste -sd' ')" = "network" ]
 }
 
 @test "menu: a ticks every section, a again unticks them" {
@@ -156,7 +156,7 @@ no_real_calls() {
   [ "$(sections_run | paste -sd' ')" = "$ALL" ]
   menu_keys 'aajj \n' --dry-run
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-  [ "$(sections_run | paste -sd' ')" = "system" ]
+  [ "$(sections_run | paste -sd' ')" = "network" ]
 }
 
 @test "menu: the cursor stops at the first and last section" {
@@ -172,7 +172,7 @@ no_real_calls() {
   menu_keys '\njj \n' --dry-run
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [[ "$output" == *"Tick at least one section"* ]]
-  [ "$(sections_run | paste -sd' ')" = "system" ]
+  [ "$(sections_run | paste -sd' ')" = "network" ]
 }
 
 @test "menu: q quits without installing anything" {
@@ -194,7 +194,7 @@ no_real_calls() {
 @test "menu: SS3 arrow keys (application cursor mode) move the cursor too" {
   menu_keys '\033OB\033OB\033OB \033OA \n' --dry-run
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-  [ "$(sections_run | paste -sd' ')" = "system environment" ]
+  [ "$(sections_run | paste -sd' ')" = "network environment" ]
 }
 
 @test "menu: no line is wider than 79 columns, so redraws don't wrap" {
@@ -294,14 +294,14 @@ no_real_calls() {
 @test "menu: an unreadable manifest is reported once, not once per section" {
   HAKPAK_TOOLSET="$BATS_TEST_TMPDIR/missing.txt" menu_keys 'q' --dry-run
   [ "$(grep -c "can't read" <<< "$output")" -eq 1 ] || { echo "$output"; return 1; }
-  [[ "$output" == *"[ ] system"* ]]
+  [[ "$output" == *"[ ] network"* ]]
 }
 
 @test "no sections and no terminal: asks for section names, reads nothing as keys" {
   run bash -c 'printf " \n" | bash "$1" --dry-run' _ "$REPO/install/setup.sh"
   [ "$status" -eq 2 ]
   [[ "$output" == *"pass section names or all"* ]]
-  [[ "$output" != *"[ ] system"* ]]
+  [[ "$output" != *"[ ] network"* ]]
   [ -z "$(sections_run)" ]
   no_real_calls
 }
@@ -310,7 +310,7 @@ no_real_calls() {
   _HAKPAK_EUID=0 menu_keys 'a\n'
   [ "$status" -ne 0 ]
   [[ "$output" == *"not as root"* ]]
-  [[ "$output" != *"[ ] system"* ]]
+  [[ "$output" != *"[ ] network"* ]]
   no_real_calls
 }
 

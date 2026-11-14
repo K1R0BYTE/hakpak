@@ -34,7 +34,7 @@ bash setup.sh --dry-run all          # everything, without installing
 bash setup.sh --help                 # the section names
 ```
 
-Sections: `top`, `dev`, `system`, `environment`, `basic`, `surfing`, `web`, `pentest`, `cloud`, `cicd`, `mitm`, `wordlists`, `wsl`, `rdp`. If one fails, the rest still run and `setup.sh` lists the failed sections at the end.
+Sections: `top`, `dev`, `network`, `environment`, `basic`, `surfing`, `web`, `pentest`, `cloud`, `cicd`, `mitm`, `wordlists`, `wsl`, `rdp`. If one fails, the rest still run and `setup.sh` lists the failed sections at the end.
 
 Run `setup.sh` as your normal user, not with sudo. Your user needs sudo rights; the scripts ask for your password only for the steps that need root (apt packages, `/usr/local`, `/etc`). Everything else installs as you: Go tools into `/opt/go`, pipx and uv tools into `~/.local/bin`, and git tools into `/opt/<tool>`, owned by you.
 
@@ -116,7 +116,7 @@ Every tool is one row in [`install/toolset.txt`](install/toolset.txt): its secti
 * security-audit (plugin): Cloudflare's security-audit-skill
 * claude-code-config (git): Trail of Bits' Claude Code config; run claude there and /trailofbits:config
 
-## System
+## Network
 
 * net-tools (apt)
 * bind9-dnsutils (apt)
