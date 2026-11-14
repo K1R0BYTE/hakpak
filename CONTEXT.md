@@ -10,7 +10,7 @@
 
 **Tool kind**: how a tool is installed. One of `apt`, `go`, `pipx`, `gem`, `git`, `venv`, `url`, `uv`, `plugin`, `custom`. A `uv` tool is a Python command line tool installed with `uv tool install`; a `plugin` is a Claude Code plugin, and its source is the marketplace it comes from. Every tool goes through `install_tool <kind> <name> …` in `install/lib.sh`. A `custom` tool names a function in `install/custom.sh`.
 
-**Install module**: `install/lib.sh`. Knows how to install each tool kind, skips tools that are already present, keeps going when one tool fails, and prints the failed tools at the end.
+**Install module**: `install/lib.sh`. Knows how to install each tool kind, skips tools that are already present, keeps going when one tool fails, and prints the failed tools at the end, with the cause when their output shows one: a download the network refused (HTTP 403), or apt files that don't match its index (a stale mirror, which `apt_install` retries once after `apt-get clean` and `update`).
 
 **Dry run**: `setup.sh --dry-run all` (or `--dry-run` with named sections, or `HAKPAK_DRY_RUN=1`) makes the install module record every command instead of running it (to `HAKPAK_DRY_RUN_LOG`, or stdout). Tests and CI use it; nothing is installed.
 
@@ -20,7 +20,7 @@
 
 **Plugin marketplace**: a catalogue of Claude Code plugins. The Dev section registers three (`trailofbits/skills`, `trailofbits/skills-curated`, `anthropics/skills`) and hakpak's own, `.claude-plugin/marketplace.json`, which lists a skill published as a plain repo as a plugin. Plugins install into `~/.claude/plugins`, so they also work where `~/.claude/skills` is read-only.
 
-**Sandbox**: a Docker Sandbox (sbx), told by `$SANDBOX_NAME` and `/etc/sandbox-persistent.sh` (`is_sbx`). There the Dev section adds its environment (`system/.dev`) to that file, a read-only `~/.claude/skills` is skipped, and a failed install names the `sbx policy` commands for the host.
+**Sandbox**: a Docker Sandbox (sbx), told by `$SANDBOX_NAME` and `/etc/sandbox-persistent.sh` (`is_sbx`). There the Dev section adds its environment (`system/.dev`) to that file, a read-only `~/.claude/skills` is skipped, and an install the network policy refused (HTTP 403) names the `sbx policy` commands for the host.
 
 **Theme**: a named look for the shell: a Starship prompt config `configs/starship/<name>.toml` and a tmux status bar `configs/tmux/themes/<name>.conf`. `tools/hakpak-theme <name>` picks one (`neon` by default); the choice is one word in `~/.config/hakpak/theme`, read by `.zshrc` and `.tmux.conf`, so the repo stays clean.
 

@@ -555,10 +555,10 @@ DEV_TOOLS="build-essential ripgrep jq git-delta gh shellcheck shfmt fd uv python
   [[ "$output" == *"settings.json"* ]]
 }
 
-@test "in a sandbox a failed install names the network policy and how to allow a host" {
+@test "in a sandbox a blocked install names the network policy and how to allow a host" {
   in_sandbox
   lib
-  HAKPAK_FAILED=(uv)
+  HAKPAK_FAILED=(uv) HAKPAK_BLOCKED=(uv)
   run install_summary
   [ "$status" -ne 0 ]
   [[ "$output" == *"sbx policy log box"* ]] || { echo "$output"; return 1; }
@@ -567,7 +567,7 @@ DEV_TOOLS="build-essential ripgrep jq git-delta gh shellcheck shfmt fd uv python
 
 @test "outside a sandbox a failed install says nothing about sbx" {
   lib
-  HAKPAK_FAILED=(uv)
+  HAKPAK_FAILED=(uv) HAKPAK_BLOCKED=(uv)
   run install_summary
   [ "$status" -ne 0 ]
   [[ "$output" != *"sbx"* ]] || { echo "$output"; return 1; }
@@ -577,9 +577,10 @@ DEV_TOOLS="build-essential ripgrep jq git-delta gh shellcheck shfmt fd uv python
   in_sandbox
   export SANDBOX_NAME='box; rm -rf /'
   lib
-  HAKPAK_FAILED=(uv)
+  HAKPAK_FAILED=(uv) HAKPAK_BLOCKED=(uv)
   run install_summary
   [[ "$output" != *"rm -rf"* ]] || { echo "$output"; return 1; }
+  [[ "$output" == *"sbx policy log SANDBOX"* ]] || { echo "$output"; return 1; }
 }
 
 # --- section rules shared by every section ---

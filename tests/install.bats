@@ -419,3 +419,192 @@ section() {
 @test "README says to run setup.sh without sudo" {
   grep -qi 'not with sudo' "$REPO/README.md"
 }
+
+# --- why an install failed (issue #45) ---
+# Real adapter with stubs: sudo runs its command, apt-get, curl and pipx
+# print what the test asks for. Each apt-get call is logged to apt.calls.
+
+failing_tools() {
+  unset HAKPAK_DRY_RUN SANDBOX_NAME
+  export NO_COLOR=1
+  export HAKPAK_SYSROOT="$BATS_TEST_TMPDIR/sysroot"
+  mkdir -p "$HAKPAK_SYSROOT" "$BATS_TEST_TMPDIR/bin"
+  T="$BATS_TEST_TMPDIR"
+  printf '#!/bin/sh\nexec "$@"\n' > "$T/bin/sudo"
+  # apt-get: `install` fails with the text in apt.fail while that file
+  # exists; apt.fail-once removes itself after one failure.
+  cat > "$T/bin/apt-get" <<STUB
+#!/bin/sh
+echo "\$*" >> "$T/apt.calls"
+[ "\$1" = install ] || [ "\$2" = install ] || exit 0
+if [ -f "$T/apt.fail-once" ]; then cat "$T/apt.fail-once"; rm -f "$T/apt.fail-once"; exit 100; fi
+if [ -f "$T/apt.fail" ]; then cat "$T/apt.fail"; exit 100; fi
+echo "Setting up \$*"
+STUB
+  chmod +x "$T/bin/sudo" "$T/bin/apt-get"
+  PATH="$T/bin:$PATH"
+}
+
+stub_fails() {
+  printf '#!/bin/sh\necho "%s" >&2\nexit 1\n' "$2" > "$T/bin/$1"
+  chmod +x "$T/bin/$1"
+}
+
+MISMATCH='E: Failed to fetch http://dhi.io/deb/fzf_amd64.deb  File has unexpected size (1540024 != 1540288). Mirror sync in progress? [IP: fdd5::a 3128]'
+APT_403='E: Failed to fetch http://example.org/pool/x.deb  403  Forbidden [IP: 10.0.0.1 3128]'
+
+sandbox() {
+  export SANDBOX_NAME=box
+  mkdir -p "$HAKPAK_SYSROOT/etc"
+  echo '# sandbox env' > "$HAKPAK_SYSROOT/etc/sandbox-persistent.sh"
+}
+
+@test "apt retries once after a mirror mismatch: clean, update, install again" {
+  failing_tools
+  echo "$MISMATCH" > "$T/apt.fail-once"
+  lib
+  install_tool apt fzf
+  [ "$(cat "$T/apt.calls")" = "install -y fzf
+clean
+update
+install -y fzf" ] || { cat "$T/apt.calls"; return 1; }
+  run install_summary
+  [ "$status" -eq 0 ]
+}
+
+@test "a hash mismatch is retried too" {
+  failing_tools
+  echo 'E: Failed to fetch http://x/y.deb  Hash Sum mismatch' > "$T/apt.fail-once"
+  lib
+  install_tool apt fzf
+  grep -qx clean "$T/apt.calls"
+}
+
+@test "apt doesn't retry a failure that isn't a mismatch" {
+  failing_tools
+  echo 'E: Unable to locate package nosuch' > "$T/apt.fail"
+  lib
+  install_tool apt nosuch || true
+  [ "$(cat "$T/apt.calls")" = "install -y nosuch" ] || { cat "$T/apt.calls"; return 1; }
+}
+
+@test "a mismatch that stays is retried only once, and the summary says the mirror is out of date" {
+  failing_tools
+  sandbox
+  echo "$MISMATCH" > "$T/apt.fail"
+  lib
+  install_tool apt fzf || true
+  [ "$(grep -c '^install' "$T/apt.calls")" -eq 2 ] || { cat "$T/apt.calls"; return 1; }
+  run install_summary
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Failed to install: fzf"* ]] || { echo "$output"; return 1; }
+  [[ "$output" == *"mirror"* ]] || { echo "$output"; return 1; }
+  [[ "$output" != *"sbx policy"* ]] || { echo "$output"; return 1; }
+}
+
+@test "the install's own output is still shown" {
+  failing_tools
+  echo "$MISMATCH" > "$T/apt.fail"
+  lib
+  run install_tool apt fzf
+  [[ "$output" == *"File has unexpected size"* ]] || { echo "$output"; return 1; }
+}
+
+@test "in a sandbox a blocked apt download (403) names the network policy" {
+  failing_tools
+  sandbox
+  echo "$APT_403" > "$T/apt.fail"
+  lib
+  install_tool apt nmap || true
+  run install_summary
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"sbx policy log box"* ]] || { echo "$output"; return 1; }
+  [[ "$output" == *"sbx policy allow network --sandbox box HOST"* ]]
+  [[ "$output" != *"mirror"* ]] || { echo "$output"; return 1; }
+}
+
+@test "in a sandbox a download the proxy refused names the network policy" {
+  failing_tools
+  sandbox
+  stub_fails curl 'curl: (56) CONNECT tunnel failed, response 403'
+  lib
+  install_tool url fuzz https://example.org/fuzz.txt "$T/fuzz.txt" || true
+  run install_summary
+  [[ "$output" == *"sbx policy log box"* ]] || { echo "$output"; return 1; }
+}
+
+@test "in a sandbox a 403 body from the policy counts as blocked" {
+  failing_tools
+  sandbox
+  stub_fails pipx 'Blocked by network policy: domain pypi.org'
+  lib
+  install_tool pipx sometool || true
+  run install_summary
+  [[ "$output" == *"sbx policy"* ]] || { echo "$output"; return 1; }
+}
+
+@test "in a sandbox a failed package-list update with a 403 names the network policy" {
+  failing_tools
+  sandbox
+  stub_fails apt-get "$APT_403"
+  lib
+  step 'package lists' sudo apt-get update || true
+  run install_summary
+  [[ "$output" == *"Failed to install: package lists"* ]] || { echo "$output"; return 1; }
+  [[ "$output" == *"sbx policy log box"* ]] || { echo "$output"; return 1; }
+}
+
+@test "in a sandbox a failure that isn't a block doesn't blame the network policy" {
+  failing_tools
+  sandbox
+  stub_fails pipx 'error: no matching distribution'
+  lib
+  install_tool pipx sometool || true
+  run install_summary
+  [ "$status" -ne 0 ]
+  [[ "$output" != *"sbx policy"* ]] || { echo "$output"; return 1; }
+  [[ "$output" != *"network policy"* ]] || { echo "$output"; return 1; }
+}
+
+@test "a download size in kB isn't taken for an HTTP 403" {
+  failing_tools
+  sandbox
+  stub_fails pipx 'Get:1 http://x trixie/main fzf [403 kB]
+E: something else'
+  lib
+  install_tool pipx sometool || true
+  run install_summary
+  [[ "$output" != *"sbx policy"* ]] || { echo "$output"; return 1; }
+}
+
+@test "outside a sandbox a 403 says nothing about sbx" {
+  failing_tools
+  echo "$APT_403" > "$T/apt.fail"
+  lib
+  install_tool apt nmap || true
+  run install_summary
+  [ "$status" -ne 0 ]
+  [[ "$output" != *"sbx"* ]] || { echo "$output"; return 1; }
+}
+
+@test "an install step that sets a variable still sets it (not run in a subshell)" {
+  failing_tools
+  lib
+  _sets_var() { HAKPAK_TEST_VAR=set; }
+  install_tool custom thing _sets_var
+  [ "${HAKPAK_TEST_VAR:-}" = set ]
+}
+
+@test "a group apt install gets over a mismatch with one retry" {
+  failing_tools
+  echo "$MISMATCH" > "$T/apt.fail-once"
+  lib
+  apt_install vim fzf
+  [ "$(grep -c '^install' "$T/apt.calls")" -eq 2 ]
+}
+
+@test "dry run records one apt install and no retry" {
+  lib
+  install_tool apt fzf
+  [ "$(grep -c 'apt-get' "$HAKPAK_DRY_RUN_LOG")" -eq 1 ] || { cat "$HAKPAK_DRY_RUN_LOG"; return 1; }
+}
