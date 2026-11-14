@@ -608,3 +608,47 @@ E: something else'
   install_tool apt fzf
   [ "$(grep -c 'apt-get' "$HAKPAK_DRY_RUN_LOG")" -eq 1 ] || { cat "$HAKPAK_DRY_RUN_LOG"; return 1; }
 }
+
+@test "a retry that fails for another reason isn't called a stale mirror" {
+  failing_tools
+  echo "$MISMATCH" > "$T/apt.fail-once"
+  echo 'E: Sub-process /usr/bin/dpkg returned an error code (1)' > "$T/apt.fail"
+  lib
+  install_tool apt fzf || true
+  grep -qx clean "$T/apt.calls"
+  run install_summary
+  [ "$status" -ne 0 ]
+  [[ "$output" != *"mirror"* ]] || { echo "$output"; return 1; }
+}
+
+@test "after a group install retried, the one-by-one fallback doesn't clean and update again" {
+  failing_tools
+  echo "$MISMATCH" > "$T/apt.fail"
+  export HAKPAK_TOOLSET="$T/toolset.txt"
+  printf 'top apt vim\ntop apt fzf\ntop apt zsh\n' > "$HAKPAK_TOOLSET"
+  lib
+  install_section top
+  [ "$(grep -cx clean "$T/apt.calls")" -eq 1 ] || { cat "$T/apt.calls"; return 1; }
+  run install_summary
+  [[ "$output" == *"vim fzf zsh: apt got a file"* ]] || { echo "$output"; return 1; }
+}
+
+@test "an install's errors stay on stderr" {
+  bats_require_minimum_version 1.5.0
+  failing_tools
+  stub_fails pipx 'error: no matching distribution'
+  lib
+  run --separate-stderr install_tool pipx sometool
+  [[ "$output" != *"no matching distribution"* ]] || { echo "$output"; return 1; }
+  [[ "$stderr" == *"no matching distribution"* ]] || { echo "$stderr"; return 1; }
+}
+
+@test "captures nest, also around a program that isn't a function" {
+  failing_tools
+  sandbox
+  lib
+  _nested() { local d; d="$(_new_output_dir)"; _tee_output "$d" sh -c 'echo "403  Forbidden"; exit 1'; local rc=$?; _drop_output "$d"; return $rc; }
+  run timeout 10 bash -c "source '$REPO/install/lib.sh'; $(declare -f _nested); install_tool custom thing _nested; install_summary"
+  [ "$status" -ne 124 ] || { echo "hung"; return 1; }
+  [[ "$output" == *"sbx policy log box"* ]] || { echo "$output"; return 1; }
+}

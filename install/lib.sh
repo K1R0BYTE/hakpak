@@ -71,6 +71,7 @@ HAKPAK_FAILED=()
 # the index (a stale mirror or proxy cache).
 HAKPAK_BLOCKED=()
 HAKPAK_STALE=()
+HAKPAK_APT_STALE=0
 
 _RED="\033[1;31m"
 _GREEN="\033[1;32m"
@@ -111,13 +112,14 @@ run_step() {
 step() {
   local label="$1" rc=0 out
   shift
-  out="$(_new_output_log)"
+  HAKPAK_APT_STALE=0
+  out="$(_new_output_dir)"
   case "$1" in
     link_config|merge_history|start_zsh_from_bash|link_dev_git_config|persist_dev_env_in_sbx) _tee_output "$out" "$@" || rc=$? ;;
     *) _tee_output "$out" run_step "$@" || rc=$? ;;
   esac
   if [ "$rc" -eq 0 ]; then
-    rm -f "$out"
+    _drop_output "$out"
     return 0
   fi
   echo "failed: $label"
@@ -126,47 +128,62 @@ step() {
   return 1
 }
 
-# A file for one install's output. Not run_step: it is hakpak's own scratch
-# file, made in a dry run too, and removed once the install is judged.
-_new_output_log() {
-  mktemp "${TMPDIR:-/tmp}/hakpak-output.XXXXXXXX"
+# A private dir (mode 700) for one install's output. Not run_step: it is
+# hakpak's own scratch space, made in a dry run too, and removed once the
+# install is judged.
+_new_output_dir() {
+  mktemp -d "${TMPDIR:-/tmp}/hakpak-output.XXXXXXXX"
+}
+
+_drop_output() {
+  [ -n "$1" ] && rm -rf -- "$1"
+  return 0
 }
 
 # Run a command in this shell (so the variables it sets stay set), show its
-# output, and keep a copy in a file: _tee_output <file> <command...>
+# output, and keep a copy in <dir>/log: _tee_output <dir> <command...>
+# stdout and stderr stay apart, each through its own tee and fifo. The tees
+# are background jobs, so their PIDs are known and waited on, also when
+# calls nest.
 _tee_output() {
-  local file="$1" rc
+  local dir="$1" rc=0 out_pid err_pid
   shift
-  if [ -z "$file" ]; then
+  if [ -z "$dir" ] || ! mkfifo "$dir/out" "$dir/err" 2>/dev/null; then
     "$@"
     return
   fi
-  rc=0
-  "$@" > >(tee -a "$file") 2>&1 || rc=$?
-  # Let tee write the last of it before the file is read.
-  wait "$!" 2>/dev/null
+  tee -a "$dir/log" < "$dir/out" &
+  out_pid=$!
+  tee -a "$dir/log" < "$dir/err" >&2 &
+  err_pid=$!
+  "$@" > "$dir/out" 2> "$dir/err" || rc=$?
+  wait "$out_pid" "$err_pid"
+  rm -f "$dir/out" "$dir/err"
   return "$rc"
 }
 
-# The network refused a request: an HTTP 403 from apt, curl or git, or the
-# body of a sandbox policy block. A bare "403" isn't enough ("[403 kB]").
+# The network refused a request: an HTTP 403 from apt, curl, git or a
+# package tool, or the body of a sandbox policy block. A bare "403" isn't
+# enough ("[403 kB]").
 _output_blocked() {
-  grep -Eq '403 +Forbidden|error: 403|response 403|HTTP/[0-9.]+ 403|Approval required for |Blocked by (local rule|org policy|network policy)' "$1" 2>/dev/null
+  grep -Eqi '403 +Forbidden|error: 403|response 403|returned 403|status( code)?:? 403|HTTP/[0-9.]+ 403|\bE403\b|Approval required for |Blocked by (local rule|org policy|network policy)' "$1/log" 2>/dev/null
 }
 
 # apt downloaded a file that doesn't match its index.
 _output_stale() {
-  grep -Eq 'File has unexpected size|Hash Sum mismatch|Mirror sync in progress' "$1" 2>/dev/null
+  grep -Eq 'File has unexpected size|Hash Sum mismatch|Mirror sync in progress' "$1/log" 2>/dev/null
 }
 
+# Stale only when apt's last attempt was: the first one's mismatch is still
+# in the log after a retry that failed for another reason.
 _note_why_failed() {
   local name="$1" out="$2"
   if _output_blocked "$out"; then
     HAKPAK_BLOCKED+=("$name")
-  elif _output_stale "$out"; then
+  elif [ "${HAKPAK_APT_STALE:-0}" = 1 ]; then
     HAKPAK_STALE+=("$name")
   fi
-  rm -f "$out"
+  _drop_output "$out"
 }
 
 # A private temp dir (mode 700). In dry run, a placeholder path is returned
@@ -596,19 +613,29 @@ need_command() {
 
 # A package that doesn't match apt's index ("Mirror sync in progress?") is
 # often a mirror or proxy cache caught mid-update: clean apt's cache, read
-# the lists again and try once more.
+# the lists again and try once more. HAKPAK_APT_STALE says whether the last
+# attempt still didn't match. _HAKPAK_APT_NO_RETRY=1 skips the retry (the
+# per-package fallback after a group install that already retried).
 apt_install() {
   local out rc=0
-  out="$(_new_output_log)"
+  out="$(_new_output_dir)"
+  HAKPAK_APT_STALE=0
   _tee_output "$out" run_step sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y "$@" || rc=$?
   if [ "$rc" -ne 0 ] && _output_stale "$out"; then
-    log "A download didn't match apt's index; cleaning apt's cache and trying again"
-    rc=0
-    { run_step sudo apt-get clean &&
-      run_step sudo apt-get update &&
-      run_step sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"; } || rc=$?
+    HAKPAK_APT_STALE=1
+    if [ "${_HAKPAK_APT_NO_RETRY:-0}" != 1 ]; then
+      log "A download didn't match apt's index; cleaning apt's cache and trying again"
+      _drop_output "$out"
+      out="$(_new_output_dir)"
+      rc=0
+      { run_step sudo apt-get clean &&
+        run_step sudo apt-get update &&
+        _tee_output "$out" run_step sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"; } || rc=$?
+      HAKPAK_APT_STALE=0
+      [ "$rc" -ne 0 ] && _output_stale "$out" && HAKPAK_APT_STALE=1
+    fi
   fi
-  rm -f "$out"
+  _drop_output "$out"
   return "$rc"
 }
 
@@ -880,9 +907,10 @@ install_tool() {
   esac
   log "Installing $name"
   local out
-  out="$(_new_output_log)"
+  HAKPAK_APT_STALE=0
+  out="$(_new_output_dir)"
   if _tee_output "$out" "_install_$kind" "$name" "$@"; then
-    rm -f "$out"
+    _drop_output "$out"
     return 0
   fi
   echo "failed: $name"

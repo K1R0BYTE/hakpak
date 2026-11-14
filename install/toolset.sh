@@ -191,12 +191,15 @@ install_section() {
     if apt_install "${packages[@]}"; then
       log_ok "Installed ${apt_names[*]}"
     else
+      # apt_install already retried a mismatch for the whole group.
+      local _HAKPAK_APT_NO_RETRY=1
       for i in "${!apt_names[@]}"; do
         read -r -a src_args <<< "${apt_args[$i]}"
         args=()
         for a in "${src_args[@]}"; do args+=("$(_toolset_expand "$a")"); done
         install_tool apt "${apt_names[$i]}" "${args[*]}" || true
       done
+      unset _HAKPAK_APT_NO_RETRY
     fi
   fi
   for row in "${other[@]}"; do
