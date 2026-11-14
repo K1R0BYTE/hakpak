@@ -89,6 +89,54 @@ _install_oh_my_zsh() {
   return 0
 }
 
+# --- Top ---
+
+# Claude Code from Anthropic's signed apt repo, stable channel (about a week
+# behind the latest release). The repo key must be Anthropic's release key:
+# its fingerprint is the one in the Claude Code setup docs
+# (https://code.claude.com/docs/en/setup). apt installs don't update
+# themselves: `sudo apt update && sudo apt upgrade claude-code`.
+# The skills are linked on every run, so a new skill in the repo shows up.
+_install_claude_code() {
+  if has_command claude; then
+    log_ok "claude-code already installed"
+  else
+    add_apt_repo claude-code \
+      https://downloads.claude.ai/keys/claude-code.asc \
+      /etc/apt/keyrings/claude-code.gpg \
+      'deb [signed-by=/etc/apt/keyrings/claude-code.gpg] https://downloads.claude.ai/claude-code/apt/stable stable main' \
+      31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE &&
+      apt_install claude-code || return 1
+  fi
+  _link_claude_skills
+}
+
+# Link every skill in the repo's .claude/skills (a directory with a SKILL.md)
+# into your Claude Code skills directory, so Claude Code loads it in any
+# project and `git pull` updates it. A skill of the same name that you
+# already have (a directory, or your own link) is kept; a broken link is
+# replaced. Safe to re-run.
+_link_claude_skills() {
+  local src="$HAKPAK_ROOT/.claude/skills"
+  local dest="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills"
+  local dir name target rc=0
+  for dir in "$src"/*/; do
+    dir="${dir%/}"
+    [ -f "$dir/SKILL.md" ] || continue
+    name="${dir##*/}"
+    target="$dest/$name"
+    if [ -L "$target" ] && [ "$(readlink "$target")" = "$dir" ]; then
+      log_ok "skill $name already linked"
+    elif [ -e "$target" ]; then
+      log_ok "skill $name: kept your own at $target"
+    else
+      { [ -d "$dest" ] || run_step mkdir -p "$dest"; } &&
+        run_step ln -sfn "$dir" "$target" || rc=1
+    fi
+  done
+  return "$rc"
+}
+
 # --- Surfing ---
 
 # Debian ships firefox-esr; Ubuntu ships firefox.

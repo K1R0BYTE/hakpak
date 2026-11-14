@@ -34,7 +34,7 @@ bash setup.sh --dry-run all          # everything, without installing
 bash setup.sh --help                 # the section names
 ```
 
-Sections: `system`, `environment`, `basic`, `surfing`, `web`, `pentest`, `cloud`, `cicd`, `mitm`, `wordlists`, `wsl`, `rdp`. If one fails, the rest still run and `setup.sh` lists the failed sections at the end.
+Sections: `system`, `environment`, `basic`, `top`, `surfing`, `web`, `pentest`, `cloud`, `cicd`, `mitm`, `wordlists`, `wsl`, `rdp`. If one fails, the rest still run and `setup.sh` lists the failed sections at the end.
 
 Run `setup.sh` as your normal user, not with sudo. Your user needs sudo rights; the scripts ask for your password only for the steps that need root (apt packages, `/usr/local`, `/etc`). Everything else installs as you: Go tools into `/opt/go`, pipx tools into `~/.local/bin`, and git tools into `/opt/<tool>`, owned by you.
 
@@ -45,6 +45,8 @@ You can clone it anywhere; the scripts find the repo from their own path.
 If a tool fails to install, the rest keep going and each section lists what failed at the end.
 
 Re-running a section is safe. Your own dotfiles (`.zshrc`, `.tmux.conf`, `.dircolors`) are moved to `<file>.bak` once and replaced with links into `configs/`, so later runs change nothing. Configs under `/etc` (like `/etc/wsl.conf`) are copied, not linked, because root services read them. The curated `.zsh_history` is merged into your own history instead of linked, so Ctrl+R finds those commands and what you type stays local.
+
+The `top` section installs the [Claude Code](https://code.claude.com/docs/en/setup) CLI from Anthropic's signed apt repo, `stable` channel, after checking the repo key's fingerprint. Installed this way it doesn't update itself: run `sudo apt update && sudo apt upgrade claude-code`. Start it with `claude` and sign in on first run.
 
 To see what a section would do without changing anything:
 
@@ -78,18 +80,22 @@ Every tool is one row in [`install/toolset.txt`](install/toolset.txt): its secti
 ## Basic
 
 * git (apt)
-* vim (apt)
 * wget (apt)
 * curl (apt)
-* fzf (apt): Ctrl+R history search
 * zip (apt)
 * unzip (apt)
 * p7zip-full (apt)
 * xclip (apt)
+
+## Top
+
+* vim (apt)
+* fzf (apt): Ctrl+R history search
 * zsh (apt): with the hakpak config and history
 * oh-my-zsh: with zsh-syntax-highlighting and zsh-autosuggestions
 * tmux (apt): with the hakpak config
 * tpm (git)
+* claude-code: Claude Code CLI from Anthropic's apt repo (stable), with the skills from .claude/skills
 
 ## Surfing
 
@@ -192,7 +198,7 @@ The `wsl` section installs only `/etc/wsl.conf`, and the menu ticks it by defaul
 
 # Agent skills
 
-`.claude/skills` holds two skills for AI coding agents that test hakpak inside [Docker Sandboxes](https://docs.docker.com/ai/sandboxes/). Claude Code loads them from a checkout of this repo.
+`.claude/skills` holds two skills for AI coding agents that test hakpak inside [Docker Sandboxes](https://docs.docker.com/ai/sandboxes/). Claude Code loads them from a checkout of this repo, and the `top` section links every skill there into `~/.claude/skills` (or `$CLAUDE_CONFIG_DIR/skills`), so Claude Code has them in any project and `git pull` updates them. A skill of the same name that you already have is kept.
 
 - `sbx-cli`: commands and flags of the `sbx` CLI, checked against `sbx --help` for v0.51.0.
 - `sbx-arch`: how Docker Sandboxes works: isolation, network and credential model, limits, local versus cloud.

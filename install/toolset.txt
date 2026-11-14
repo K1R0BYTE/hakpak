@@ -2,7 +2,7 @@
 #
 #   section  kind  name  [source...]  # note shown in the README
 #
-# Sections: system environment basic surfing web pentest cloud cicd mitm wordlists rdp
+# Sections: system environment basic top surfing web pentest cloud cicd mitm wordlists rdp
 # Kinds (see install/lib.sh): apt go pipx gem git venv url custom
 #   custom: the source is a function in install/custom.sh
 # In a source, $HOME and $HAKPAK_OPT are replaced; nothing else expands.
@@ -26,19 +26,22 @@ environment  apt     jython
 environment  custom  go  _install_go_toolchain  # latest Go from go.dev, in /usr/local/go
 
 # --- Basic ---
-basic  apt     git
-basic  apt     vim
-basic  apt     wget
-basic  apt     curl
-basic  apt     fzf                                # Ctrl+R history search
-basic  apt     zip
-basic  apt     unzip
-basic  apt     p7zip-full
-basic  apt     xclip
-basic  apt     zsh                                # with the hakpak config and history
-basic  custom  oh-my-zsh  _install_oh_my_zsh      # with zsh-syntax-highlighting and zsh-autosuggestions
-basic  apt     tmux                               # with the hakpak config
-basic  git     tpm  https://github.com/tmux-plugins/tpm  $HOME/.tmux/plugins/tpm
+basic  apt  git
+basic  apt  wget
+basic  apt  curl
+basic  apt  zip
+basic  apt  unzip
+basic  apt  p7zip-full
+basic  apt  xclip
+
+# --- Top ---
+top  apt     vim
+top  apt     fzf                                  # Ctrl+R history search
+top  apt     zsh                                  # with the hakpak config and history
+top  custom  oh-my-zsh  _install_oh_my_zsh        # with zsh-syntax-highlighting and zsh-autosuggestions
+top  apt     tmux                                 # with the hakpak config
+top  git     tpm  https://github.com/tmux-plugins/tpm  $HOME/.tmux/plugins/tpm
+top  custom  claude-code  _install_claude_code    # Claude Code CLI from Anthropic's apt repo (stable), with the skills from .claude/skills
 
 # --- Surfing ---
 surfing  custom  firefox  _install_firefox        # firefox-esr on Debian, firefox on Ubuntu

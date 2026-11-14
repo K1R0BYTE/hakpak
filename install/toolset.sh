@@ -20,6 +20,7 @@ HAKPAK_SECTIONS=(
   "system:System"
   "environment:Environment"
   "basic:Basic"
+  "top:Top"
   "surfing:Surfing"
   "web:Web Tools"
   "pentest:Pentest Tools"

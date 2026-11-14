@@ -27,7 +27,7 @@
 # Both are safe to re-run.
 #
 # Vendor downloads (used by custom steps in install/custom.sh):
-#   add_apt_repo <name> <key-url> <keyring> <source line>   signed vendor apt repo
+#   add_apt_repo <name> <key-url> <keyring> <source line> [fingerprint]   signed vendor apt repo
 #   verify_sha256 <file> <sums> [asset]                      check a download's hash
 #   verify_gpg_signature <key.asc> <sig> <file>              check a detached signature
 # Call the verify_* checks through run_step, so a dry run records them.
@@ -449,19 +449,38 @@ _dearmor_key() {
   }
 }
 
+# True when the key file <file> holds exactly one OpenPGP key and its
+# fingerprint is <fingerprint> (spaces and letter case don't matter):
+#   _key_has_fingerprint <file> <fingerprint>
+_key_has_fingerprint() {
+  local file="$1" want="${2//[[:space:]]/}" got
+  got="$(gpg --batch --homedir "$(dirname "$file")" --with-colons --show-keys "$file" 2>/dev/null |
+    awk -F: '$1 == "pub" { primary = 1 } $1 == "fpr" && primary { print $10; primary = 0 }')"
+  if [ -z "$got" ]; then
+    echo "not an OpenPGP key: $file"
+    return 1
+  fi
+  if [ "${got^^}" != "${want^^}" ]; then
+    echo "key fingerprint is not $want:"
+    echo "$got"
+    return 1
+  fi
+}
+
 _write_line() {
   printf '%s\n' "$1" > "$2"
 }
 
 # Add a vendor apt repo signed by its own key:
-#   add_apt_repo <name> <key-url> <keyring> <source line>
+#   add_apt_repo <name> <key-url> <keyring> <source line> [fingerprint]
 # The key is downloaded to a temp dir and installed at <keyring> (no
-# apt-key); the source line, which must say signed-by=<keyring>, goes in
+# apt-key). With a fingerprint, the download must be exactly that one key,
+# or nothing is installed. The source line, which must say signed-by=<keyring>, goes in
 # /etc/apt/sources.list.d/<name>.list. Then only that list is refreshed. A
 # repo whose list and keyring are both there already is skipped. If apt
 # can't read the new repo, its list is removed again so apt keeps working.
 add_apt_repo() {
-  local name="$1" key_url="$2" keyring="$3" line="$4"
+  local name="$1" key_url="$2" keyring="$3" line="$4" fingerprint="${5:-}"
   local key list tmp rc
   if ! [[ "$name" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
     echo "apt repo name must be a plain file name: $name"
@@ -487,6 +506,7 @@ add_apt_repo() {
   tmp="$(make_temp_dir)" || return 1
   run_step curl -fsSL -o "$tmp/$name.key" "$key_url" &&
     run_step _dearmor_key "$tmp/$name.key" "$tmp/$name.gpg" &&
+    { [ -z "$fingerprint" ] || run_step _key_has_fingerprint "$tmp/$name.gpg" "$fingerprint"; } &&
     run_step _write_line "$line" "$tmp/$name.list" &&
     _run_at "$key" install -d -m 755 "$(dirname "$key")" &&
     _run_at "$key" install -m 644 "$tmp/$name.gpg" "$key" &&

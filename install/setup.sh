@@ -17,6 +17,7 @@ section_script() {
     system) echo system.sh ;;
     environment) echo enviroment.sh ;;
     basic) echo basic.sh ;;
+    top) echo top.sh ;;
     surfing) echo surfing.sh ;;
     web) echo web-soft.sh ;;
     pentest) echo pentest-soft.sh ;;

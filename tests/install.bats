@@ -210,7 +210,7 @@ section() {
 }
 
 @test "every section script runs cleanly in dry run" {
-  for s in system.sh enviroment.sh basic.sh surfing.sh web-soft.sh pentest-soft.sh cloud.sh cicd.sh mitm.sh wordlists.sh rdp.sh wsl.sh; do
+  for s in system.sh enviroment.sh basic.sh top.sh surfing.sh web-soft.sh pentest-soft.sh cloud.sh cicd.sh mitm.sh wordlists.sh rdp.sh wsl.sh; do
     : > "$HAKPAK_DRY_RUN_LOG"
     section "$s"
     [ "$status" -eq 0 ] || { echo "$s failed: $output"; return 1; }
@@ -248,12 +248,12 @@ section() {
 
 @test "section scripts don't call apt, go, pip or git directly" {
   run grep -nE '^\s*(sudo )?(apt|apt-get|go|pip3?|git) ' \
-    "$REPO"/install/{system,enviroment,basic,surfing,web-soft,pentest-soft,cloud,cicd,mitm,wordlists,rdp,wsl}.sh
+    "$REPO"/install/{system,enviroment,basic,top,surfing,web-soft,pentest-soft,cloud,cicd,mitm,wordlists,rdp,wsl}.sh
   [ "$status" -ne 0 ] || { echo "$output"; return 1; }
 }
 
 @test "section scripts don't define their own logger" {
-  run grep -n 'colorecho()' "$REPO"/install/{system,enviroment,basic,surfing,web-soft,pentest-soft,cloud,cicd,mitm,wordlists,rdp,wsl}.sh
+  run grep -n 'colorecho()' "$REPO"/install/{system,enviroment,basic,top,surfing,web-soft,pentest-soft,cloud,cicd,mitm,wordlists,rdp,wsl}.sh
   [ "$status" -ne 0 ]
 }
 
@@ -296,14 +296,6 @@ section() {
   [ -d "$d" ]
   [ "$(stat -c %a "$d")" = "700" ]
   rm -rf "$d"
-}
-
-@test "basic section installs oh-my-zsh by git clone, then its plugins" {
-  HOME="$BATS_TEST_TMPDIR/home"
-  mkdir -p "$HOME"
-  section basic.sh
-  recorded "git clone --depth 1 https://github.com/ohmyzsh/ohmyzsh.git $HOME/.oh-my-zsh"
-  recorded "zsh-autosuggestions"
 }
 
 # --- Surfing and MiTM sections ---
@@ -349,6 +341,7 @@ section() {
   grep -q 'mitm.sh' "$REPO/install/setup.sh"
   grep -q 'cloud.sh' "$REPO/install/setup.sh"
   grep -q 'cicd.sh' "$REPO/install/setup.sh"
+  grep -q 'top.sh' "$REPO/install/setup.sh"
 }
 
 # --- dnsmasq swap and sudo handling ---
@@ -399,7 +392,7 @@ section() {
 }
 
 @test "every section script checks it isn't run as root" {
-  for s in system enviroment basic surfing web-soft pentest-soft cloud cicd mitm wordlists rdp; do
+  for s in system enviroment basic top surfing web-soft pentest-soft cloud cicd mitm wordlists rdp; do
     grep -q '^require_normal_user' "$REPO/install/$s.sh" || { echo "$s.sh"; return 1; }
   done
 }

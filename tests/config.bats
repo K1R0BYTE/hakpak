@@ -244,16 +244,16 @@ section() {
   run bash "$REPO/install/$1"
 }
 
-@test "basic section links its dotfiles with link_config and merges history" {
-  grep -q '^step .zshrc link_config zsh/.zshrc' "$REPO/install/basic.sh"
-  grep -q '^step .dircolors link_config .dircolors' "$REPO/install/basic.sh"
-  grep -q '^step .tmux.conf link_config tmux/.tmux.conf' "$REPO/install/basic.sh"
-  grep -q '^step .zsh_history merge_history zsh/.zsh_history' "$REPO/install/basic.sh"
-  ! grep -q '_link_home_config' "$REPO/install/basic.sh"
+@test "top section links its dotfiles with link_config and merges history" {
+  grep -q '^step .zshrc link_config zsh/.zshrc' "$REPO/install/top.sh"
+  grep -q '^step .dircolors link_config .dircolors' "$REPO/install/top.sh"
+  grep -q '^step .tmux.conf link_config tmux/.tmux.conf' "$REPO/install/top.sh"
+  grep -q '^step .zsh_history merge_history zsh/.zsh_history' "$REPO/install/top.sh"
+  ! grep -q '_link_home_config' "$REPO/install/top.sh"
 }
 
-@test "basic section never symlinks .zsh_history into the repo" {
-  section basic.sh
+@test "top section never symlinks .zsh_history into the repo" {
+  section top.sh
   grep -q "ln -sfn $REPO/configs/zsh/.zshrc $HOME/.zshrc" "$HAKPAK_DRY_RUN_LOG"
   grep -q "_merge_history_into $REPO/configs/zsh/.zsh_history $HOME/.zsh_history" "$HAKPAK_DRY_RUN_LOG"
   ! grep -q "ln .*configs/zsh/.zsh_history" "$HAKPAK_DRY_RUN_LOG"
