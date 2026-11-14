@@ -248,6 +248,23 @@ DEV_TOOLS="build-essential ripgrep jq git-delta gh shellcheck shfmt fd uv python
   not_recorded "npm install -g"
 }
 
+@test "a Node 22 with pnpm that is already there is kept, with no download" {
+  bin="$HOME/.local/share/fnm/aliases/default/bin"
+  mkdir -p "$bin"
+  printf '#!/bin/sh\necho v22.1.0\n' > "$bin/node"
+  printf '#!/bin/sh\n' > "$bin/pnpm"
+  chmod +x "$bin/node" "$bin/pnpm"
+  lib
+  run install_tool custom node _install_node
+  [[ "$output" == *"already installed"* ]] || { echo "$output"; return 1; }
+  not_recorded "fnm install"
+  not_recorded "corepack"
+  # another major version is not "already there"
+  printf '#!/bin/sh\necho v20.9.0\n' > "$bin/node"
+  install_tool custom node _install_node
+  recorded "fnm install 22"
+}
+
 @test "Rust comes from rustup-init, checked against its sha256, and leaves your shell files alone" {
   lib_without rustup
   install_tool custom rust _install_rust
@@ -338,6 +355,16 @@ DEV_TOOLS="build-essential ripgrep jq git-delta gh shellcheck shfmt fd uv python
   [[ "$output" != *"sandbox"* ]] || { echo "$output"; return 1; }
 }
 
+@test "without the clone, the hint doesn't send you to a directory that isn't there" {
+  export HAKPAK_DRY_RUN=0
+  lib
+  run dev_hint
+  [[ "$output" != *"claude-code-config"* ]] || { echo "$output"; return 1; }
+  mkdir -p "$HAKPAK_OPT/claude-code-config/.git"
+  run dev_hint
+  [[ "$output" == *"$HAKPAK_OPT/claude-code-config"* ]]
+}
+
 # --- configs ---
 
 @test "system/.dev is valid in bash and zsh, and quiet when no tool is there" {
@@ -369,6 +396,13 @@ DEV_TOOLS="build-essential ripgrep jq git-delta gh shellcheck shfmt fd uv python
   [[ "$output" == *"loaded="* ]] && [[ "$output" != *"loaded=1"* ]]
 }
 
+@test "system/.dev puts the Rust and Node installed here ahead of the system's" {
+  mkdir -p "$HOME/.cargo/bin" "$HOME/.local/share/fnm/aliases/default/bin" "$HOME/.local/bin"
+  run env -i HOME="$HOME" PATH=/usr/bin:/bin bash -c '. "$1"; echo "$PATH"' _ "$REPO/system/.dev"
+  [[ "$output" == "$HOME/.local/share/fnm/aliases/default/bin:$HOME/.cargo/bin:"*":/usr/bin:"* ]] || { echo "$output"; return 1; }
+  [[ "$output" == *":/usr/bin:"*":$HOME/.local/bin" ]] || { echo "$output"; return 1; }
+}
+
 @test "system/.dev leaves out directories that are not there" {
   run env -i HOME="$HOME" PATH=/usr/bin:/bin bash -c '. "$1"; echo "$PATH"' _ "$REPO/system/.dev"
   [[ "$output" != *".cargo/bin"* ]] || { echo "$output"; return 1; }
@@ -376,8 +410,11 @@ DEV_TOOLS="build-essential ripgrep jq git-delta gh shellcheck shfmt fd uv python
 }
 
 @test "system/.dev hardens npm and offers claude-yolo as an alias only" {
-  run env -i HOME="$HOME" PATH=/usr/bin:/bin bash -ic '. "$1"; echo "$NPM_CONFIG_IGNORE_SCRIPTS $NPM_CONFIG_MINIMUM_RELEASE_AGE"; alias claude-yolo' _ "$REPO/system/.dev"
-  [[ "$output" == *"true 1440"* ]] || { echo "$output"; return 1; }
+  run env -i HOME="$HOME" PATH=/usr/bin:/bin bash -ic '. "$1"; echo "$NPM_CONFIG_IGNORE_SCRIPTS $NPM_CONFIG_MIN_RELEASE_AGE $PNPM_CONFIG_MINIMUM_RELEASE_AGE"; alias claude-yolo' _ "$REPO/system/.dev"
+  # a day: npm counts days, pnpm minutes
+  [[ "$output" == *"true 1 1440"* ]] || { echo "$output"; return 1; }
+  # not the name npm ignores
+  ! grep -q 'NPM_CONFIG_MINIMUM_RELEASE_AGE' "$REPO/system/.dev"
   [[ "$output" == *"claude --dangerously-skip-permissions"* ]]
 }
 
@@ -464,11 +501,32 @@ DEV_TOOLS="build-essential ripgrep jq git-delta gh shellcheck shfmt fd uv python
   [ "$output" = "1 true" ] || { echo "$output"; return 1; }
 }
 
+@test "sandbox environment: the line still succeeds when the clone is gone" {
+  export HAKPAK_DRY_RUN=0
+  in_sandbox
+  f="$HAKPAK_SYSROOT/etc/sandbox-persistent.sh"
+  lib
+  persist_dev_env_in_sbx
+  sed "s|$REPO/system/.dev|/gone/system/.dev|g" "$f" > "$f.moved"
+  run bash -ec '. "$1" && echo loaded' _ "$f.moved"
+  [ "$output" = loaded ] || { echo "$output"; return 1; }
+}
+
+@test "sandbox environment: the file is written in place, not replaced" {
+  export HAKPAK_DRY_RUN=0
+  in_sandbox
+  f="$HAKPAK_SYSROOT/etc/sandbox-persistent.sh"
+  before="$(stat -c %i "$f")"
+  lib
+  persist_dev_env_in_sbx
+  [ "$(stat -c %i "$f")" = "$before" ]
+}
+
 @test "sandbox environment: a line left by a clone that moved is replaced" {
   export HAKPAK_DRY_RUN=0
   in_sandbox
   f="$HAKPAK_SYSROOT/etc/sandbox-persistent.sh"
-  echo '[ -r /old/system/.dev ] && . /old/system/.dev  # hakpak: dev tools' >> "$f"
+  echo 'if [ -r /old/system/.dev ]; then . /old/system/.dev; fi  # hakpak: dev tools' >> "$f"
   lib
   persist_dev_env_in_sbx
   [ "$(grep -c 'hakpak: dev tools' "$f")" -eq 1 ] || { cat "$f"; return 1; }

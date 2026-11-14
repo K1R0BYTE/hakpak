@@ -285,6 +285,11 @@ _HAKPAK_NODE=22
 _install_node() {
   local dir="$HOME/.local/share/fnm" bin
   bin="$dir/aliases/default/bin"
+  if [ -x "$bin/node" ] && [ -x "$bin/pnpm" ] &&
+      [[ "$("$bin/node" --version 2>/dev/null)" == "v$_HAKPAK_NODE."* ]]; then
+    log_ok "node $_HAKPAK_NODE and pnpm already installed"
+    return 0
+  fi
   run_step env FNM_DIR="$dir" fnm install "$_HAKPAK_NODE" &&
     run_step env FNM_DIR="$dir" fnm default "$_HAKPAK_NODE" &&
     run_step env PATH="$bin:$PATH" corepack enable pnpm &&

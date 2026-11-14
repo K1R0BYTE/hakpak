@@ -296,16 +296,38 @@ link_dev_git_config() {
 _SBX_ENV_MARK='# hakpak: dev tools'
 persist_dev_env_in_sbx() {
   local file="$HAKPAK_SYSROOT/etc/sandbox-persistent.sh" env="$HAKPAK_ROOT/system/.dev" line
-  printf -v line '[ -r %q ] && . %q  %s' "$env" "$env" "$_SBX_ENV_MARK"
+  # An `if`, not `[ -r ] &&`: with the clone gone the line must still
+  # succeed, or a shell that stops on errors would stop at this file.
+  printf -v line 'if [ -r %q ]; then . %q; fi  %s' "$env" "$env" "$_SBX_ENV_MARK"
   if grep -qxF -- "$line" "$file" 2>/dev/null &&
       [ "$(grep -cF -- "$_SBX_ENV_MARK" "$file")" -eq 1 ]; then
     log_ok "$file already loads the dev environment"
     return 0
   fi
-  # sed and sh, not a shell function: the file is root's, so they run under sudo.
-  # shellcheck disable=SC2016 # $1 and $2 are for the inner sh
-  _run_at "$file" sed -i "/${_SBX_ENV_MARK}\$/d" "$file" &&
-    _run_at "$file" sh -c 'printf "%s\n" "$1" >> "$2"' sh "$line" "$file"
+  run_step _rewrite_with_marked_line "$file" "$_SBX_ENV_MARK" "$line"
+}
+
+# Keep exactly one line with <mark> in <file>, as _set_marked_line does, but
+# write the new text into the file itself: a file a sandbox mounts into
+# place can't be replaced by a rename. With sudo when the file isn't yours.
+_rewrite_with_marked_line() {
+  local file="$1" mark="$2" line="$3" tmp rc
+  tmp="$(mktemp "${TMPDIR:-/tmp}/hakpak.XXXXXXXX")" || return 1
+  grep -vF -- "$mark" "$file" > "$tmp"
+  if [ "$?" -gt 1 ]; then
+    rm -f "$tmp"
+    return 1
+  fi
+  printf '%s\n' "$line" >> "$tmp" || { rm -f "$tmp"; return 1; }
+  if [ -w "$file" ]; then
+    cat "$tmp" > "$file"
+  else
+    # shellcheck disable=SC2024 # the temp file is yours to read; only the write needs root
+    sudo tee "$file" < "$tmp" > /dev/null
+  fi
+  rc=$?
+  rm -f "$tmp"
+  return "$rc"
 }
 
 # The configs of the dev section: git, and in a sandbox its environment file.
@@ -325,11 +347,14 @@ link_dev_configs() {
 dev_hint() {
   local dir="$HAKPAK_OPT/claude-code-config"
   echo
-  log_ok "For the Claude Code config (CLAUDE.md, language rules): cd $dir && claude, then run /trailofbits:config"
-  if is_sbx; then
-    echo "This is a sandbox: leave its settings.json unticked there. It denies sudo, and ~/.claude/settings.json here already holds the sandbox's own key helper and permission mode."
+  # Only when the clone is there (a dry run assumes it).
+  if [ -d "$dir/.git" ] || [ "${HAKPAK_DRY_RUN:-0}" = "1" ]; then
+    log_ok "For the Claude Code config (CLAUDE.md, language rules): cd $dir && claude, then run /trailofbits:config"
+    if is_sbx; then
+      echo "This is a sandbox: leave its settings.json unticked there. It denies sudo, and ~/.claude/settings.json here already holds the sandbox's own key helper and permission mode."
+    fi
   fi
-  echo "Open a new shell (or log out and in) to get the new PATH: cargo, node, pnpm and the uv tools."
+  echo "Open a new shell (or log out and in) for the new PATH: the tools in ~/.cargo/bin, ~/.local/bin and fnm's Node."
 }
 
 # Make an interactive bash hand over to zsh, by sourcing
