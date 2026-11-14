@@ -79,11 +79,18 @@ not_recorded() {
   done
 }
 
-@test "no tool is listed twice" {
+@test "no tool is listed twice in one section" {
   lib
   [ -n "$(toolset_rows)" ]
-  dups="$(toolset_rows | cut -f3 | sort | uniq -d)"
+  dups="$(toolset_rows | cut -f1,3 | sort | uniq -d)"
   [ -z "$dups" ] || { echo "listed twice: $dups"; return 1; }
+}
+
+@test "a tool listed in two sections has the same row in both" {
+  lib
+  # kind, name and source (fields 2-4) of every row: one distinct row per name.
+  differ="$(toolset_rows | cut -f2-4 | sort -u | cut -f2 | sort | uniq -d)"
+  [ -z "$differ" ] || { echo "different rows for: $differ"; return 1; }
 }
 
 # --- parsing and checks ---
@@ -160,15 +167,42 @@ EOF
   [[ "$output" == *"linpeas"*"needs"* ]]
 }
 
-@test "check reports a tool listed twice" {
+@test "check reports a tool listed twice in one section" {
   manifest <<'EOF'
 web      go  gospider  github.com/jaeles-project/gospider@latest
-pentest  go  gospider  github.com/jaeles-project/gospider@latest
+pentest  apt nmap
+web      go  gospider  github.com/jaeles-project/gospider@latest
 EOF
   lib
   run toolset_check
   [ "$status" -ne 0 ]
-  [[ "$output" == *"gospider listed twice"* ]]
+  [[ "$output" == *"line 3: gospider listed twice in web (also line 1)"* ]] || { echo "$output"; return 1; }
+}
+
+@test "check allows the same tool in two sections" {
+  manifest <<'EOF'
+web      go  gospider  github.com/jaeles-project/gospider@latest  # crawler
+pentest  go  gospider  github.com/jaeles-project/gospider@latest
+web      apt nmap
+pentest  apt nmap
+EOF
+  lib
+  run toolset_check
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+}
+
+@test "check reports a tool that two sections install in different ways" {
+  manifest <<'EOF'
+web      go   gospider  github.com/jaeles-project/gospider@latest
+pentest  go   gospider  github.com/jaeles-project/gospider@v1.0.0
+web      apt  nmap
+pentest  pipx nmap
+EOF
+  lib
+  run toolset_check
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"line 2: gospider: not the same as in web (line 1)"* ]] || { echo "$output"; return 1; }
+  [[ "$output" == *"line 4: nmap: not the same as in web (line 3)"* ]] || { echo "$output"; return 1; }
 }
 
 @test "check reports a row with no name" {

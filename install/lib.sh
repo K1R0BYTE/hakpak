@@ -27,7 +27,7 @@
 # Both are safe to re-run.
 #
 # Vendor downloads (used by custom steps in install/custom.sh):
-#   add_apt_repo <name> <key-url> <keyring> <source line>   signed vendor apt repo
+#   add_apt_repo <name> <key-url> <keyring> <source line> [fingerprint]   signed vendor apt repo
 #   verify_sha256 <file> <sums> [asset]                      check a download's hash
 #   verify_gpg_signature <key.asc> <sig> <file>              check a detached signature
 # Call the verify_* checks through run_step, so a dry run records them.
@@ -242,6 +242,22 @@ _copy_config() {
   _run_at "$target" install -m 644 "$src" "$target"
 }
 
+# The shell configs: .zshrc, .dircolors, .tmux.conf and the curated history.
+# The basic and top sections both install zsh and tmux, so both call this.
+# Your own files are backed up once, re-runs change nothing.
+link_shell_configs() {
+  step .zshrc link_config zsh/.zshrc "${HOME}/.zshrc"
+  step .dircolors link_config .dircolors "${HOME}/.dircolors"
+  # History is merged, not linked, so new commands stay out of the repo.
+  step .zsh_history merge_history zsh/.zsh_history "${HOME}/.zsh_history"
+  step .tmux.conf link_config tmux/.tmux.conf "${HOME}/.tmux.conf"
+  # Reload only if a tmux server is running.
+  if tmux info >/dev/null 2>&1; then
+    step 'tmux reload' tmux source-file "${HOME}/.tmux.conf"
+  fi
+  return 0
+}
+
 # Add the curated zsh history to yours: merge_history <configs/path> <target>
 # Your history is kept and stays last (so Ctrl+R finds your own commands
 # first), curated entries you don't already have go before it, and nothing
@@ -316,6 +332,12 @@ has_command() {
   command -v "$1" >/dev/null 2>&1
 }
 
+# Make sure a command other installs rely on is there, installing its apt
+# package (default: the same name) when it isn't: need_command <cmd> [package]
+need_command() {
+  has_command "$1" || apt_install "${2:-$1}"
+}
+
 apt_install() {
   run_step sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"
 }
@@ -364,7 +386,8 @@ _install_git() {
     return 0
   fi
   # Clone into an (empty) directory owned by you.
-  ensure_dir "$dest" &&
+  need_command git &&
+    ensure_dir "$dest" &&
     run_step git clone --depth 1 "$url" "$dest"
 }
 
@@ -452,19 +475,42 @@ _dearmor_key() {
   }
 }
 
+# True when the key file <file> holds exactly one OpenPGP key and its
+# fingerprint is <fingerprint> (spaces and letter case don't matter):
+#   _key_has_fingerprint <file> <fingerprint>
+_key_has_fingerprint() {
+  local file="$1" want="${2//[[:space:]]/}" got home
+  # gpg needs a home it can write, even to only show a key.
+  home="$(mktemp -d "${TMPDIR:-/tmp}/hakpak.XXXXXXXX")" || return 1
+  got="$(gpg --batch --homedir "$home" --with-colons --show-keys "$file" 2>/dev/null |
+    awk -F: '$1 == "pub" { primary = 1 } $1 == "fpr" && primary { print $10; primary = 0 }')"
+  rm -rf "$home"
+  if [ -z "$got" ]; then
+    echo "not an OpenPGP key: $file"
+    return 1
+  fi
+  if [ "${got^^}" != "${want^^}" ]; then
+    echo "key fingerprint is not $want:"
+    echo "$got"
+    return 1
+  fi
+}
+
 _write_line() {
   printf '%s\n' "$1" > "$2"
 }
 
 # Add a vendor apt repo signed by its own key:
-#   add_apt_repo <name> <key-url> <keyring> <source line>
+#   add_apt_repo <name> <key-url> <keyring> <source line> [fingerprint]
 # The key is downloaded to a temp dir and installed at <keyring> (no
-# apt-key); the source line, which must say signed-by=<keyring>, goes in
+# apt-key). With a fingerprint, the download must be exactly that one key,
+# or nothing is installed, and a keyring that is already there is checked
+# too and replaced if it holds another key. The source line, which must say signed-by=<keyring>, goes in
 # /etc/apt/sources.list.d/<name>.list. Then only that list is refreshed. A
 # repo whose list and keyring are both there already is skipped. If apt
 # can't read the new repo, its list is removed again so apt keeps working.
 add_apt_repo() {
-  local name="$1" key_url="$2" keyring="$3" line="$4"
+  local name="$1" key_url="$2" keyring="$3" line="$4" fingerprint="${5:-}"
   local key list tmp rc
   if ! [[ "$name" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
     echo "apt repo name must be a plain file name: $name"
@@ -480,16 +526,25 @@ add_apt_repo() {
   esac
   key="$HAKPAK_SYSROOT$keyring"
   list="$HAKPAK_SYSROOT/etc/apt/sources.list.d/$name.list"
-  if [ -f "$list" ] && [ -s "$key" ]; then
+  if [ -f "$list" ] && [ -s "$key" ] && [ -z "$fingerprint" ]; then
     log_ok "$name apt repo already configured"
     return 0
   fi
   if ! has_command gpg; then
     apt_install gnupg || return 1
   fi
+  if [ -f "$list" ] && [ -s "$key" ]; then
+    if _key_has_fingerprint "$key" "$fingerprint" >/dev/null; then
+      log_ok "$name apt repo already configured"
+      return 0
+    fi
+    echo "$name apt repo: $key is not the expected key, replacing it"
+  fi
+  need_command curl || return 1
   tmp="$(make_temp_dir)" || return 1
   run_step curl -fsSL -o "$tmp/$name.key" "$key_url" &&
     run_step _dearmor_key "$tmp/$name.key" "$tmp/$name.gpg" &&
+    { [ -z "$fingerprint" ] || run_step _key_has_fingerprint "$tmp/$name.gpg" "$fingerprint"; } &&
     run_step _write_line "$line" "$tmp/$name.list" &&
     _run_at "$key" install -d -m 755 "$(dirname "$key")" &&
     _run_at "$key" install -m 644 "$tmp/$name.gpg" "$key" &&

@@ -244,11 +244,13 @@ section() {
   run bash "$REPO/install/$1"
 }
 
-@test "basic section links its dotfiles with link_config and merges history" {
-  grep -q '^step .zshrc link_config zsh/.zshrc' "$REPO/install/basic.sh"
-  grep -q '^step .dircolors link_config .dircolors' "$REPO/install/basic.sh"
-  grep -q '^step .tmux.conf link_config tmux/.tmux.conf' "$REPO/install/basic.sh"
-  grep -q '^step .zsh_history merge_history zsh/.zsh_history' "$REPO/install/basic.sh"
+@test "basic and top link the shell dotfiles with link_config and merge history, in one shared step" {
+  grep -q '^  step .zshrc link_config zsh/.zshrc' "$REPO/install/lib.sh"
+  grep -q '^  step .dircolors link_config .dircolors' "$REPO/install/lib.sh"
+  grep -q '^  step .tmux.conf link_config tmux/.tmux.conf' "$REPO/install/lib.sh"
+  grep -q '^  step .zsh_history merge_history zsh/.zsh_history' "$REPO/install/lib.sh"
+  grep -qx 'link_shell_configs' "$REPO/install/basic.sh"
+  grep -qx 'link_shell_configs' "$REPO/install/top.sh"
   ! grep -q '_link_home_config' "$REPO/install/basic.sh"
 }
 

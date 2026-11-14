@@ -20,6 +20,7 @@ HAKPAK_SECTIONS=(
   "system:System"
   "environment:Environment"
   "basic:Basic"
+  "top:Top"
   "surfing:Surfing"
   "web:Web Tools"
   "pentest:Pentest Tools"
@@ -99,7 +100,7 @@ _toolset_known() {
 toolset_check() {
   local rows n section kind name src _note
   local -a ids=() src_args errs=()
-  local -A seen=()
+  local -A seen=() where=() how=()
   local s
   for s in "${HAKPAK_SECTIONS[@]}"; do ids+=("${s%%:*}"); done
   rows="$(_toolset_parse)" || return 1
@@ -127,10 +128,17 @@ toolset_check() {
         fi
         ;;
     esac
-    if [ -n "${seen[$name]:-}" ]; then
-      errs+=("line $n: $name listed twice (also line ${seen[$name]})")
-    else
-      seen[$name]="$n"
+    # One row per tool in a section. A tool may be in more than one
+    # section, with the same kind and source in each.
+    if [ -n "${seen[$section/$name]:-}" ]; then
+      errs+=("line $n: $name listed twice in $section (also line ${seen[$section/$name]})")
+    elif [ -n "${where[$name]:-}" ] && [ "${how[$name]}" != "$kind $src" ]; then
+      errs+=("line $n: $name: not the same as in ${where[$name]}")
+    fi
+    seen[$section/$name]="$n"
+    if [ -z "${where[$name]:-}" ]; then
+      where[$name]="$section (line $n)"
+      how[$name]="$kind $src"
     fi
   done <<< "$rows"
   [ "${#errs[@]}" -eq 0 ] && return 0
