@@ -196,6 +196,8 @@ hakpak-theme wireframe       # switch
 
 Switching changes the prompt of the shell you are in and the tmux status bar at once; other open shells follow when they next start. The choice is kept in `~/.config/hakpak/theme`, not in the repo. `neon` and `wireframe` work in any font. All three use 24-bit color, which Windows Terminal and most current terminals have, and expect a dark background: the black comes from your terminal's own color scheme. Command highlighting, suggestions and the Ctrl+R history search use the same palette.
 
+tmux draws the prompt glyphs only when your locale is UTF-8; otherwise it shows them as `_`. hakpak's zsh sets `LC_CTYPE=C.UTF-8` when the environment names no UTF-8 locale (common in containers), unless you set `LC_ALL` yourself. If you start tmux from another shell without a locale, use `tmux -u`.
+
 Each prompt shows user and host, the folder, the git branch with counts (`!` changed, `+` staged, `?` untracked), the time of a command that took over 2 seconds, and the exit code of a failed command.
 
 # MiTM
