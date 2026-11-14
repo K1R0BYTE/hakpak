@@ -46,7 +46,7 @@ If a tool fails to install, the rest keep going and each section lists what fail
 
 Re-running a section is safe. Your own dotfiles (`.zshrc`, `.tmux.conf`, `.dircolors`) are moved to `<file>.bak` once and replaced with links into `configs/`, so later runs change nothing. Configs under `/etc` (like `/etc/wsl.conf`) are copied, not linked, because root services read them. The curated `.zsh_history` is merged into your own history instead of linked, so Ctrl+R finds those commands and what you type stays local.
 
-The `top` section installs the [Claude Code](https://code.claude.com/docs/en/setup) CLI from Anthropic's signed apt repo, `stable` channel, after checking the repo key's fingerprint. Installed this way it doesn't update itself: run `sudo apt update && sudo apt upgrade claude-code`. Start it with `claude` and sign in on first run.
+The `top` section installs the [Claude Code](https://code.claude.com/docs/en/setup) CLI from Anthropic's signed apt repo, `stable` channel, after checking the repo key's fingerprint. If you already have `claude` (say, from the native installer), it is left as it is and only the skills are linked. Installed from apt it doesn't update itself: run `sudo apt update && sudo apt upgrade claude-code`. Start it with `claude` and sign in on first run.
 
 To see what a section would do without changing anything:
 

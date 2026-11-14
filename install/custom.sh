@@ -80,7 +80,8 @@ _install_oh_my_zsh() {
   if [ -f "$zsh_dir/oh-my-zsh.sh" ]; then
     log_ok "oh-my-zsh already installed"
   else
-    run_step git clone --depth 1 https://github.com/ohmyzsh/ohmyzsh.git "$zsh_dir" || return 1
+    need_command git &&
+      run_step git clone --depth 1 https://github.com/ohmyzsh/ohmyzsh.git "$zsh_dir" || return 1
   fi
   _use_zsh_as_login_shell
   # Each plugin is its own tool, so a failed clone is reported by its name.
@@ -92,7 +93,8 @@ _install_oh_my_zsh() {
 # --- Top ---
 
 # Claude Code from Anthropic's signed apt repo, stable channel (about a week
-# behind the latest release). The repo key must be Anthropic's release key:
+# behind the latest release). A `claude` you already have, however it was
+# installed, is left as it is. The repo key must be Anthropic's release key:
 # its fingerprint is the one in the Claude Code setup docs
 # (https://code.claude.com/docs/en/setup). apt installs don't update
 # themselves: `sudo apt update && sudo apt upgrade claude-code`.
@@ -114,21 +116,33 @@ _install_claude_code() {
 # Link every skill in the repo's .claude/skills (a directory with a SKILL.md)
 # into your Claude Code skills directory, so Claude Code loads it in any
 # project and `git pull` updates it. A skill of the same name that you
-# already have (a directory, or your own link) is kept; a broken link is
-# replaced. Safe to re-run.
+# already have (a directory, or your own link) is kept. A broken link that
+# hakpak made is repaired or removed: one left by a clone that has moved,
+# or by a skill the repo no longer has. Safe to re-run.
 _link_claude_skills() {
   local src="$HAKPAK_ROOT/.claude/skills"
   local dest="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills"
-  local dir name target rc=0
+  local dir name target to rc=0
+  # Links to skills that are gone from this clone.
+  for target in "$dest"/*; do
+    [ -L "$target" ] && [ ! -e "$target" ] || continue
+    case "$(readlink "$target")" in
+      "$src"/*) run_step rm -f "$target" || rc=1 ;;
+    esac
+  done
   for dir in "$src"/*/; do
     dir="${dir%/}"
     [ -f "$dir/SKILL.md" ] || continue
     name="${dir##*/}"
     target="$dest/$name"
-    if [ -L "$target" ] && [ "$(readlink "$target")" = "$dir" ]; then
+    to=""
+    [ -L "$target" ] && to="$(readlink "$target")"
+    if [ "$to" = "$dir" ]; then
       log_ok "skill $name already linked"
     elif [ -e "$target" ]; then
-      log_ok "skill $name: kept your own at $target"
+      log_ok "skill $name: kept your own at $target${to:+ -> $to}"
+    elif [ -n "$to" ] && [[ "$to" != */.claude/skills/"$name" ]]; then
+      log_ok "skill $name: kept your own link at $target -> $to (broken)"
     else
       { [ -d "$dest" ] || run_step mkdir -p "$dest"; } &&
         run_step ln -sfn "$dir" "$target" || rc=1

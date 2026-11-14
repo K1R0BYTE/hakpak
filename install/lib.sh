@@ -316,6 +316,12 @@ has_command() {
   command -v "$1" >/dev/null 2>&1
 }
 
+# Make sure a command other installs rely on is there, installing its apt
+# package (default: the same name) when it isn't: need_command <cmd> [package]
+need_command() {
+  has_command "$1" || apt_install "${2:-$1}"
+}
+
 apt_install() {
   run_step sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"
 }
@@ -364,7 +370,8 @@ _install_git() {
     return 0
   fi
   # Clone into an (empty) directory owned by you.
-  ensure_dir "$dest" &&
+  need_command git &&
+    ensure_dir "$dest" &&
     run_step git clone --depth 1 "$url" "$dest"
 }
 
@@ -453,9 +460,12 @@ _dearmor_key() {
 # fingerprint is <fingerprint> (spaces and letter case don't matter):
 #   _key_has_fingerprint <file> <fingerprint>
 _key_has_fingerprint() {
-  local file="$1" want="${2//[[:space:]]/}" got
-  got="$(gpg --batch --homedir "$(dirname "$file")" --with-colons --show-keys "$file" 2>/dev/null |
+  local file="$1" want="${2//[[:space:]]/}" got home
+  # gpg needs a home it can write, even to only show a key.
+  home="$(mktemp -d "${TMPDIR:-/tmp}/hakpak.XXXXXXXX")" || return 1
+  got="$(gpg --batch --homedir "$home" --with-colons --show-keys "$file" 2>/dev/null |
     awk -F: '$1 == "pub" { primary = 1 } $1 == "fpr" && primary { print $10; primary = 0 }')"
+  rm -rf "$home"
   if [ -z "$got" ]; then
     echo "not an OpenPGP key: $file"
     return 1
@@ -475,7 +485,8 @@ _write_line() {
 #   add_apt_repo <name> <key-url> <keyring> <source line> [fingerprint]
 # The key is downloaded to a temp dir and installed at <keyring> (no
 # apt-key). With a fingerprint, the download must be exactly that one key,
-# or nothing is installed. The source line, which must say signed-by=<keyring>, goes in
+# or nothing is installed, and a keyring that is already there is checked
+# too and replaced if it holds another key. The source line, which must say signed-by=<keyring>, goes in
 # /etc/apt/sources.list.d/<name>.list. Then only that list is refreshed. A
 # repo whose list and keyring are both there already is skipped. If apt
 # can't read the new repo, its list is removed again so apt keeps working.
@@ -496,13 +507,21 @@ add_apt_repo() {
   esac
   key="$HAKPAK_SYSROOT$keyring"
   list="$HAKPAK_SYSROOT/etc/apt/sources.list.d/$name.list"
-  if [ -f "$list" ] && [ -s "$key" ]; then
+  if [ -f "$list" ] && [ -s "$key" ] && [ -z "$fingerprint" ]; then
     log_ok "$name apt repo already configured"
     return 0
   fi
   if ! has_command gpg; then
     apt_install gnupg || return 1
   fi
+  if [ -f "$list" ] && [ -s "$key" ]; then
+    if _key_has_fingerprint "$key" "$fingerprint" >/dev/null; then
+      log_ok "$name apt repo already configured"
+      return 0
+    fi
+    echo "$name apt repo: $key is not the expected key, replacing it"
+  fi
+  need_command curl || return 1
   tmp="$(make_temp_dir)" || return 1
   run_step curl -fsSL -o "$tmp/$name.key" "$key_url" &&
     run_step _dearmor_key "$tmp/$name.key" "$tmp/$name.gpg" &&

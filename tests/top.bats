@@ -352,3 +352,76 @@ CLAUDE_FPR=31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE
   [ "$status" -ne 0 ]
   [[ "$output" == *"failed: claude-code"* ]] || { echo "$output"; return 1; }
 }
+
+@test "a broken link of your own, to somewhere that isn't a hakpak clone, is kept" {
+  unset HAKPAK_DRY_RUN
+  mkdir -p "$SKILLS"
+  ln -s "/mnt/unplugged/dotfiles/skills/my-sbx" "$SKILLS/sbx-cli"
+  lib
+  run _link_claude_skills
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [[ "$output" == *"sbx-cli"*"kept"* ]] || { echo "$output"; return 1; }
+  [ "$(readlink "$SKILLS/sbx-cli")" = "/mnt/unplugged/dotfiles/skills/my-sbx" ]
+}
+
+@test "a link to a skill the repo no longer has is removed, other broken links stay" {
+  unset HAKPAK_DRY_RUN
+  mkdir -p "$SKILLS"
+  ln -s "$REPO/.claude/skills/gone-skill" "$SKILLS/gone-skill"
+  ln -s "$BATS_TEST_TMPDIR/elsewhere/other" "$SKILLS/other"
+  lib
+  run _link_claude_skills
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [ ! -L "$SKILLS/gone-skill" ]
+  [ -L "$SKILLS/other" ]
+}
+
+# --- what top needs from basic ---
+
+@test "git and curl are installed first when they are missing" {
+  lib_with_claude 0
+  has_command() { case "$1" in git|curl|claude) return 1 ;; *) command -v "$1" >/dev/null 2>&1 ;; esac; }
+  install_tool custom oh-my-zsh _install_oh_my_zsh
+  recorded "apt-get install -y git"
+  : > "$HAKPAK_DRY_RUN_LOG"
+  install_tool git tpm https://github.com/tmux-plugins/tpm "$HOME/.tmux/plugins/tpm"
+  recorded "apt-get install -y git"
+  : > "$HAKPAK_DRY_RUN_LOG"
+  install_tool custom claude-code _install_claude_code
+  recorded "apt-get install -y curl"
+  [ "$(grep -n 'install -y curl' "$HAKPAK_DRY_RUN_LOG" | cut -d: -f1)" -lt "$(grep -n 'curl -fsSL' "$HAKPAK_DRY_RUN_LOG" | head -1 | cut -d: -f1)" ]
+}
+
+@test "git and curl that are already there are not installed again" {
+  section top.sh
+  not_recorded "apt-get install -y git"
+  not_recorded "apt-get install -y curl"
+}
+
+# --- a repo that is already configured ---
+
+@test "add_apt_repo with a fingerprint: a keyring that is already there with that key is kept" {
+  make_test_key
+  mkdir -p "$HAKPAK_SYSROOT/etc/apt/sources.list.d" "$HAKPAK_SYSROOT/etc/apt/keyrings"
+  echo "$CLAUDE_LINE" > "$HAKPAK_SYSROOT/etc/apt/sources.list.d/claude-code.list"
+  gpg --batch --homedir "$BATS_TEST_TMPDIR/gnupg-src" --export > "$HAKPAK_SYSROOT/etc/apt/keyrings/claude-code.gpg"
+  lib
+  run add_apt_repo claude-code "$CLAUDE_KEY_URL" /etc/apt/keyrings/claude-code.gpg "$CLAUDE_LINE" "$FPR"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [[ "$output" == *"already configured"* ]]
+  [ ! -s "$HAKPAK_DRY_RUN_LOG" ] || { cat "$HAKPAK_DRY_RUN_LOG"; return 1; }
+}
+
+@test "add_apt_repo with a fingerprint: a keyring that is already there with another key is replaced" {
+  make_test_key
+  mkdir -p "$HAKPAK_SYSROOT/etc/apt/sources.list.d" "$HAKPAK_SYSROOT/etc/apt/keyrings"
+  echo "$CLAUDE_LINE" > "$HAKPAK_SYSROOT/etc/apt/sources.list.d/claude-code.list"
+  gpg --batch --homedir "$BATS_TEST_TMPDIR/gnupg-src" --export > "$HAKPAK_SYSROOT/etc/apt/keyrings/claude-code.gpg"
+  lib
+  run add_apt_repo claude-code "$CLAUDE_KEY_URL" /etc/apt/keyrings/claude-code.gpg "$CLAUDE_LINE" "$CLAUDE_FPR"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [[ "$output" == *"not the expected key"* ]] || { echo "$output"; return 1; }
+  recorded "$CLAUDE_KEY_URL"
+  recorded "_key_has_fingerprint"
+  recorded "install -m 644"
+}
