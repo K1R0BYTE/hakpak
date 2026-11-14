@@ -86,14 +86,14 @@ DEV_TOOLS="build-essential ripgrep jq git-delta gh shellcheck shfmt fd uv python
 @test "dev comes right after top" {
   lib
   ids="$(for s in "${HAKPAK_SECTIONS[@]}"; do echo "${s%%:*}"; done | paste -sd' ')"
-  [[ "$ids " == "top dev system "* ]] || { echo "$ids"; return 1; }
+  [[ "$ids " == "top dev network "* ]] || { echo "$ids"; return 1; }
   run bash "$REPO/install/setup.sh" --help
   [[ "$output" == *"dev "*"Dev"* ]] || { echo "$output"; return 1; }
 }
 
-@test "build-essential moved from system to dev" {
+@test "build-essential moved from network (formerly system) to dev" {
   lib
-  ! toolset_rows system | cut -f3 | grep -qx build-essential
+  ! toolset_rows network | cut -f3 | grep -qx build-essential
   toolset_rows dev | cut -f3 | grep -qx build-essential
 }
 
@@ -113,7 +113,7 @@ DEV_TOOLS="build-essential ripgrep jq git-delta gh shellcheck shfmt fd uv python
 }
 
 @test "the README names the dev section and lists its tools" {
-  grep -q '^Sections: `top`, `dev`, `system`,' "$REPO/README.md"
+  grep -q '^Sections: `top`, `dev`, `network`,' "$REPO/README.md"
   grep -qx '## Dev' "$REPO/README.md"
   grep -q '^\* ruff (uv)' "$REPO/README.md"
   grep -q '^\* modern-python (plugin)' "$REPO/README.md"

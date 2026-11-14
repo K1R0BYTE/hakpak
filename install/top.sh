@@ -7,7 +7,7 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 require_normal_user
 
-# top is the first section, so it can't count on system's refresh.
+# top is the first section, so it can't count on network's refresh.
 log 'Updating package lists'
 step 'package lists' sudo apt-get update
 

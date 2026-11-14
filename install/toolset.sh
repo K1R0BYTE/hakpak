@@ -19,7 +19,7 @@ HAKPAK_TOOLSET="${HAKPAK_TOOLSET:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/
 HAKPAK_SECTIONS=(
   "top:Top"
   "dev:Dev"
-  "system:System"
+  "network:Network"
   "environment:Environment"
   "basic:Basic"
   "surfing:Surfing"

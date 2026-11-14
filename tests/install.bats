@@ -210,7 +210,7 @@ section() {
 }
 
 @test "every section script runs cleanly in dry run" {
-  for s in dev.sh system.sh enviroment.sh basic.sh top.sh surfing.sh web-soft.sh pentest-soft.sh cloud.sh cicd.sh mitm.sh wordlists.sh rdp.sh wsl.sh; do
+  for s in dev.sh network.sh enviroment.sh basic.sh top.sh surfing.sh web-soft.sh pentest-soft.sh cloud.sh cicd.sh mitm.sh wordlists.sh rdp.sh wsl.sh; do
     : > "$HAKPAK_DRY_RUN_LOG"
     section "$s"
     [ "$status" -eq 0 ] || { echo "$s failed: $output"; return 1; }
@@ -248,12 +248,12 @@ section() {
 
 @test "section scripts don't call apt, go, pip or git directly" {
   run grep -nE '^\s*(sudo )?(apt|apt-get|go|pip3?|git) ' \
-    "$REPO"/install/{dev,system,enviroment,basic,top,surfing,web-soft,pentest-soft,cloud,cicd,mitm,wordlists,rdp,wsl}.sh
+    "$REPO"/install/{dev,network,enviroment,basic,top,surfing,web-soft,pentest-soft,cloud,cicd,mitm,wordlists,rdp,wsl}.sh
   [ "$status" -ne 0 ] || { echo "$output"; return 1; }
 }
 
 @test "section scripts don't define their own logger" {
-  run grep -n 'colorecho()' "$REPO"/install/{dev,system,enviroment,basic,top,surfing,web-soft,pentest-soft,cloud,cicd,mitm,wordlists,rdp,wsl}.sh
+  run grep -n 'colorecho()' "$REPO"/install/{dev,network,enviroment,basic,top,surfing,web-soft,pentest-soft,cloud,cicd,mitm,wordlists,rdp,wsl}.sh
   [ "$status" -ne 0 ]
 }
 
@@ -354,13 +354,13 @@ section() {
 
 # --- dnsmasq swap and sudo handling ---
 
-@test "system section no longer installs isc-dhcp-server" {
-  section system.sh
+@test "network section no longer installs isc-dhcp-server" {
+  section network.sh
   not_recorded "isc-dhcp-server"
 }
 
-@test "system section doesn't take over all of /opt" {
-  section system.sh
+@test "network section doesn't take over all of /opt" {
+  section network.sh
   not_recorded "chown -R"
 }
 
@@ -400,7 +400,7 @@ section() {
 }
 
 @test "every section script checks it isn't run as root" {
-  for s in dev system enviroment basic top surfing web-soft pentest-soft cloud cicd mitm wordlists rdp; do
+  for s in dev network enviroment basic top surfing web-soft pentest-soft cloud cicd mitm wordlists rdp; do
     grep -q '^require_normal_user' "$REPO/install/$s.sh" || { echo "$s.sh"; return 1; }
   done
 }

@@ -16,7 +16,7 @@ section_script() {
   case "$1" in
     top) echo top.sh ;;
     dev) echo dev.sh ;;
-    system) echo system.sh ;;
+    network) echo network.sh ;;
     environment) echo enviroment.sh ;;
     basic) echo basic.sh ;;
     surfing) echo surfing.sh ;;

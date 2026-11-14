@@ -241,7 +241,7 @@ zsh_now() {
 }
 
 @test "after installing basic it starts zsh too, after other sections it doesn't" {
-  SECTIONS="system basic" zsh_now bash
+  SECTIONS="network basic" zsh_now bash
   [[ "$output" == *"ZSH args="* ]] || { echo "$output"; return 1; }
   SECTIONS="web pentest" zsh_now bash
   [[ "$output" == *"rc=0 no-zsh"* ]] || { echo "$output"; return 1; }
@@ -316,7 +316,7 @@ EOF
   [ "$(grep -E '^  [a-z]+ +[A-Z]' <<< "$output" | head -1 | awk '{ print $1 }')" = top ]
   [ "$(toolset_rows | head -1 | cut -f1)" = top ]
   [ "$(grep -m1 '^## ' <(sed -n '/toolset:start/,/toolset:end/p' "$REPO/README.md"))" = "## Top" ]
-  grep -q '^Sections: `top`, `dev`, `system`, `environment`, `basic`, `surfing`' "$REPO/README.md"
+  grep -q '^Sections: `top`, `dev`, `network`, `environment`, `basic`, `surfing`' "$REPO/README.md"
 }
 
 @test "top refreshes the package lists itself, before installing anything" {
