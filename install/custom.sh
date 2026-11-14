@@ -100,6 +100,8 @@ _install_starship() {
     log_ok "starship already installed"
     return 0
   fi
+  # top is the first section: curl may not be there yet.
+  need_command curl || return 1
   case "$(uname -m)" in
     x86_64) arch=x86_64 ;;
     aarch64|arm64) arch=aarch64 ;;

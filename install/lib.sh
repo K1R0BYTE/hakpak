@@ -279,35 +279,64 @@ start_zsh_from_bash() {
 }
 
 # Keep exactly one line with <mark> in <file>: drop any there, add <line> at
-# the end. The file is written in place, so a link stays a link.
+# the end. The new text is written next to the file and moved over it, so a
+# full disk or an interrupt leaves the old file whole; a link stays a link
+# (the file it points to is the one replaced) and the mode is kept.
 _set_marked_line() {
-  local file="$1" mark="$2" line="$3" tmp
-  tmp="$(mktemp "${TMPDIR:-/tmp}/hakpak.XXXXXXXX")" || return 1
-  if [ -e "$file" ]; then
-    grep -vF -- "$mark" "$file" > "$tmp"
+  local file="$1" mark="$2" line="$3" real tmp rc
+  real="$file"
+  [ -L "$file" ] && real="$(readlink -f "$file")"
+  [ -n "$real" ] || { echo "can't resolve $file"; return 1; }
+  tmp="$(mktemp "$real.hakpak.XXXXXXXX")" || return 1
+  if [ -e "$real" ]; then
+    chmod --reference="$real" "$tmp" || { rm -f "$tmp"; return 1; }
+    grep -vF -- "$mark" "$real" > "$tmp"
     [ "$?" -le 1 ] || { rm -f "$tmp"; return 1; }
+  else
+    chmod 644 "$tmp"
   fi
-  printf '%s\n' "$line" >> "$tmp" && cat "$tmp" > "$file"
-  local rc=$?
+  printf '%s\n' "$line" >> "$tmp" && mv -f "$tmp" "$real"
+  rc=$?
   rm -f "$tmp"
   return "$rc"
 }
 
-# The name of the shell that started setup.sh (bash, zsh, -zsh for a login
-# shell), or nothing when it can't be read.
-_parent_shell() {
-  if [ -n "${_HAKPAK_PARENT_SHELL:-}" ]; then
-    echo "$_HAKPAK_PARENT_SHELL"
-  else
-    cat "/proc/$PPID/comm" 2>/dev/null || true
+# The process group of a process, from /proc/<pid>/stat (the fifth field;
+# the second, the name, may hold spaces and brackets).
+_process_group() {
+  local stat
+  local -a f
+  stat="$(cat "/proc/$1/stat" 2>/dev/null)" || return 1
+  read -r -a f <<< "${stat##*) }"
+  [ -n "${f[2]:-}" ] || return 1
+  echo "${f[2]}"
+}
+
+# The name of the interactive shell setup.sh was typed into (bash, sh, zsh),
+# or nothing when it was started by anything else: a script, `bash -c`, a
+# container entrypoint, ssh with a command. A shell with a prompt runs each
+# command as a job in a process group of its own; a script's commands stay
+# in the script's group.
+_prompt_shell() {
+  local name mine theirs
+  if [ -n "${_HAKPAK_PROMPT_SHELL+x}" ]; then
+    echo "$_HAKPAK_PROMPT_SHELL"
+    return 0
   fi
+  name="$(cat "/proc/$PPID/comm" 2>/dev/null)" || return 0
+  mine="$(_process_group "$$")" || return 0
+  theirs="$(_process_group "$PPID")" || return 0
+  [ "$mine" != "$theirs" ] || return 0
+  echo "${name#-}"
 }
 
 # Called last by setup.sh with the sections it installed: when zsh was among
-# them (basic, top) and you're at a terminal in another shell, replace setup
-# with zsh, so the new shell is there without logging out. `exit` goes back
-# to the shell setup was started from. Not in a dry run, not when you
-# already are in zsh, and not with HAKPAK_NO_ZSH=1.
+# them (basic, top) and setup was typed at the prompt of another shell,
+# replace setup with zsh, so the new shell is there without logging out.
+# `exit` goes back to the shell setup was started from. Not in a dry run,
+# not from a script, not when you already are in zsh, and not with
+# HAKPAK_NO_ZSH=1. zsh gets your environment without the installer's own
+# variables; the PATH and Go settings it needs come from its .zshrc.
 start_zsh_now() {
   local zsh
   _toolset_known top "$@" || _toolset_known basic "$@" || return 0
@@ -317,10 +346,14 @@ start_zsh_now() {
   if [ "${_HAKPAK_TTY:-0}" != 1 ]; then
     { [ -t 0 ] && [ -t 1 ]; } || return 0
   fi
-  case "$(_parent_shell)" in zsh|-zsh) return 0 ;; esac
+  case "$(_prompt_shell)" in
+    bash | sh | dash | ash | ksh | mksh | fish) ;;
+    *) return 0 ;;
+  esac
   zsh="$(command -v zsh)" || return 0
   "$zsh" -c exit >/dev/null 2>&1 || return 0
   log_ok "Starting zsh. Type exit to go back to your old shell; HAKPAK_NO_ZSH=1 keeps setup and bash from starting it."
+  unset HAKPAK_ROOT HAKPAK_OPT HAKPAK_SYSROOT HAKPAK_TOOLSET
   HAKPAK_ZSH_STARTED=1 SHELL="$zsh" exec "$zsh" -l
 }
 
