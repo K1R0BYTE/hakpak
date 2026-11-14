@@ -1,0 +1,16 @@
+{
+  "name": "hakpak",
+  "owner": { "name": "hakpak" },
+  "metadata": {
+    "description": "Skills published as a plain skill repo, listed as plugins so the hakpak dev section installs them with claude plugin install"
+  },
+  "plugins": [
+    {
+      "name": "security-audit",
+      "description": "Cloudflare's security-audit-skill: reconnaissance, coverage-led hunting, candidate validation and reporting",
+      "source": { "source": "github", "repo": "cloudflare/security-audit-skill" },
+      "strict": false,
+      "skills": ["./skills/security-audit"]
+    }
+  ]
+}

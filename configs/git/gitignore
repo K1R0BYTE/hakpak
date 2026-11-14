@@ -1,0 +1,34 @@
+# hakpak dev section: global git ignore (core.excludesFile), set only when
+# you have none. Clutter from the OS, editors and the Python and Node tools.
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Python
+*.pyc
+*.pyo
+__pycache__/
+*.egg-info/
+.eggs/
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+.npm/
+
+# Editors
+*.swp
+*.swo
+*~
+.idea/
+*.sublime-*
+
+# Misc
+.env.local
+.env.*.local

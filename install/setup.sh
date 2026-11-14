@@ -15,6 +15,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 section_script() {
   case "$1" in
     top) echo top.sh ;;
+    dev) echo dev.sh ;;
     system) echo system.sh ;;
     environment) echo enviroment.sh ;;
     basic) echo basic.sh ;;
@@ -111,7 +112,7 @@ wrap_tool_names() {
 # The section menu: one checkbox per section, with the tools it installs
 # (from the Toolset manifest) below it, read key by key from stdin. When the
 # whole list is taller than the terminal, only the section under the cursor
-# shows its tools. j/k or arrows move, space ticks, a ticks or unticks all,
+# shows its tools, cut to the lines the terminal has left. j/k or arrows move, space ticks, a ticks or unticks all,
 # Enter installs, q quits. On WSL the wsl section starts ticked; it installs
 # no tools, so it lists the file it installs. Sets `wanted` to the ticked
 # ids; returns 1 if nothing is installed.
@@ -143,8 +144,10 @@ choose_sections() {
     [ -n "$t" ] && counts[i]=$(($(printf '%s\n' "$t" | wc -l)))
     full=$((full + counts[i]))
   done
-  local compact=0
+  local compact=0 room=0 shown
   [ "$height" -gt 0 ] && [ "$full" -ge "$height" ] && compact=1
+  # Compact: the tool lines the terminal has room for, under the cursor.
+  room=$((height - n - 4))
   while true; do
     # On a terminal, draw over the last frame instead of below it.
     if [ "$lines" -gt 0 ] && [ "$redraw" = 1 ]; then
@@ -157,9 +160,20 @@ choose_sections() {
       [ "${ticked[i]}" = 1 ] && box="[x]"
       [ "$i" = "$cur" ] && mark=">"
       printf '%s %s %s\n' "$mark" "$box" "${ids[i]}"
-      if [ -n "${tools[i]}" ] && { [ "$compact" = 0 ] || [ "$i" = "$cur" ]; }; then
+      if [ -n "${tools[i]}" ] && [ "$compact" = 0 ]; then
         printf '%s\n' "${tools[i]}"
         lines=$((lines + counts[i]))
+      elif [ -n "${tools[i]}" ] && [ "$i" = "$cur" ] && [ "$room" -gt 0 ]; then
+        # A list longer than the room left is cut, and says so.
+        shown=${counts[i]}
+        if [ "$shown" -gt "$room" ]; then
+          shown=$room
+          [ "$shown" -gt 1 ] && printf '%s\n' "${tools[i]}" | head -n $((shown - 1))
+          echo "      ..."
+        else
+          printf '%s\n' "${tools[i]}"
+        fi
+        lines=$((lines + shown))
       fi
     done
     echo

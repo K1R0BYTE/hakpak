@@ -137,6 +137,10 @@ _install_claude_code() {
   _link_claude_skills
 }
 
+_dir_is_writable() {
+  [ -w "$1" ]
+}
+
 # Link every skill in the repo's .claude/skills (a directory with a SKILL.md)
 # into your Claude Code skills directory, so Claude Code loads it in any
 # project and `git pull` updates it. A skill of the same name that you
@@ -147,6 +151,12 @@ _link_claude_skills() {
   local src="$HAKPAK_ROOT/.claude/skills"
   local dest="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills"
   local dir name target to rc=0
+  # In a Docker Sandbox this directory is the host's shared skills store,
+  # mounted read-only unless the sandbox was created with --skills=readwrite.
+  if [ -d "$dest" ] && ! _dir_is_writable "$dest"; then
+    log_ok "skills: $dest is read-only (a sandbox's shared skills store), so hakpak's skills are not linked. On the host, sbx skills import or sbx skills add puts skills there."
+    return 0
+  fi
   # Links to skills that are gone from this clone.
   for target in "$dest"/*; do
     if [ ! -L "$target" ] || [ -e "$target" ]; then continue; fi
@@ -171,6 +181,156 @@ _link_claude_skills() {
       { [ -d "$dest" ] || run_step mkdir -p "$dest"; } &&
         run_step ln -sfn "$dir" "$target" || rc=1
     fi
+  done
+  return "$rc"
+}
+
+# --- Dev ---
+
+# Debian and Ubuntu name fd's command fdfind (another package owns fd).
+# It is linked as fd in ~/.local/bin, so scripts and agents find it under
+# the name its docs use, not only a shell with an alias.
+_install_fd() {
+  local bin
+  if has_command fd; then
+    log_ok "fd already installed"
+    return 0
+  fi
+  has_command fdfind || apt_install fd-find || return 1
+  bin="$(command -v fdfind || echo /usr/bin/fdfind)"
+  { [ -d "$HOME/.local/bin" ] || run_step mkdir -p "$HOME/.local/bin"; } &&
+    run_step ln -sfn "$bin" "$HOME/.local/bin/fd"
+}
+
+# True when <file> has exactly this sha256: _sha256_is <file> <hash>
+# For a download whose release publishes no checksum: the hash is kept in
+# hakpak, next to the version it belongs to.
+_sha256_is() {
+  local file="$1" want="$2" got
+  got="$(sha256sum "$file" | awk '{ print $1 }')" || return 1
+  if [ "${want,,}" != "$got" ]; then
+    echo "checksum mismatch for $(basename "$file")"
+    return 1
+  fi
+}
+
+# uv, Astral's Python package and tool manager, from its latest release
+# tarball, checked against the checksum published next to it. uv and uvx
+# go in /usr/local/bin. A uv you already have is kept.
+_install_uv_release() {
+  local arch asset base tmp rc
+  if has_command uv; then
+    log_ok "uv already installed"
+    return 0
+  fi
+  need_command curl || return 1
+  case "$(uname -m)" in
+    x86_64) arch=x86_64 ;;
+    aarch64|arm64) arch=aarch64 ;;
+    *) echo "uv: hakpak has no build for $(uname -m)"; return 1 ;;
+  esac
+  asset="uv-$arch-unknown-linux-gnu"
+  base="https://github.com/astral-sh/uv/releases/latest/download"
+  tmp="$(make_temp_dir)" || return 1
+  run_step curl -fsSL -o "$tmp/$asset.tar.gz" "$base/$asset.tar.gz" &&
+    run_step curl -fsSL -o "$tmp/$asset.tar.gz.sha256" "$base/$asset.tar.gz.sha256" &&
+    run_step verify_sha256 "$tmp/$asset.tar.gz" "$tmp/$asset.tar.gz.sha256" "$asset.tar.gz" &&
+    run_step tar -C "$tmp" --no-same-owner -xzf "$tmp/$asset.tar.gz" &&
+    run_step sudo install -m 755 "$tmp/$asset/uv" /usr/local/bin/uv &&
+    run_step sudo install -m 755 "$tmp/$asset/uvx" /usr/local/bin/uvx
+  rc=$?
+  run_step rm -rf "$tmp"
+  return $rc
+}
+
+# Python from uv: a prebuilt interpreter in your home, next to the system
+# python3, which stays the default. uv picks it for `uv run`, `uv venv` and
+# the uv tools. Installing a version you already have changes nothing.
+_HAKPAK_PYTHON=3.13
+_install_uv_python() {
+  run_step uv python install "$_HAKPAK_PYTHON"
+}
+
+# fnm, the Node version manager. Its releases publish no checksums, so the
+# version is pinned here with the sha256 of each zip (taken from the release
+# assets on GitHub). To update: change the version and both hashes.
+_FNM_VERSION=1.39.0
+_install_fnm() {
+  local asset sha tmp rc
+  if has_command fnm; then
+    log_ok "fnm already installed"
+    return 0
+  fi
+  case "$(_go_arch)" in
+    amd64) asset=fnm-linux.zip sha=7807664f39d39fc518da1c35ba0181e4b3267603c4b1dedeb4b5fc6ae440a224 ;;
+    arm64) asset=fnm-arm64.zip sha=4eaff58b2c5bf30d0934027572dd0b5bbb60d2a1af309230b53662d4b1d45599 ;;
+    *) echo "fnm: hakpak has no build for $(uname -m)"; return 1 ;;
+  esac
+  need_command curl && need_command unzip || return 1
+  tmp="$(make_temp_dir)" || return 1
+  run_step curl -fsSL -o "$tmp/$asset" "https://github.com/Schniz/fnm/releases/download/v$_FNM_VERSION/$asset" &&
+    run_step _sha256_is "$tmp/$asset" "$sha" &&
+    run_step unzip -q -o "$tmp/$asset" fnm -d "$tmp" &&
+    run_step sudo install -m 755 "$tmp/fnm" /usr/local/bin/fnm
+  rc=$?
+  run_step rm -rf "$tmp"
+  return $rc
+}
+
+# Node from fnm, in ~/.local/share/fnm (the directory system/.dev puts on
+# PATH), as the default version. pnpm comes through corepack, which ships
+# with Node, and is downloaded now, not at its first use: nothing is
+# installed with npm -g.
+_HAKPAK_NODE=22
+_install_node() {
+  local dir="$HOME/.local/share/fnm" bin
+  bin="$dir/aliases/default/bin"
+  run_step env FNM_DIR="$dir" fnm install "$_HAKPAK_NODE" &&
+    run_step env FNM_DIR="$dir" fnm default "$_HAKPAK_NODE" &&
+    run_step env PATH="$bin:$PATH" corepack enable pnpm &&
+    run_step env PATH="$bin:$PATH" COREPACK_ENABLE_DOWNLOAD_PROMPT=0 corepack prepare pnpm@latest --activate
+}
+
+# Rust from rustup-init, the installer binary itself (not the script from
+# sh.rustup.rs), checked against the sha256 published next to it. Stable
+# toolchain with the default profile, which has clippy and rustfmt, in
+# ~/.cargo and ~/.rustup. Your shell files are not edited: system/.dev puts
+# ~/.cargo/bin on PATH. A rustup you already have is kept.
+_install_rust() {
+  local triple base tmp rc
+  if has_command rustup || [ -x "$HOME/.cargo/bin/rustup" ]; then
+    log_ok "rust already installed"
+    return 0
+  fi
+  need_command curl || return 1
+  case "$(uname -m)" in
+    x86_64) triple=x86_64-unknown-linux-gnu ;;
+    aarch64|arm64) triple=aarch64-unknown-linux-gnu ;;
+    *) echo "rust: hakpak has no build for $(uname -m)"; return 1 ;;
+  esac
+  base="https://static.rust-lang.org/rustup/dist/$triple"
+  tmp="$(make_temp_dir)" || return 1
+  run_step curl -fsSL -o "$tmp/rustup-init" "$base/rustup-init" &&
+    run_step curl -fsSL -o "$tmp/rustup-init.sha256" "$base/rustup-init.sha256" &&
+    run_step verify_sha256 "$tmp/rustup-init" "$tmp/rustup-init.sha256" &&
+    run_step chmod 700 "$tmp/rustup-init" &&
+    run_step "$tmp/rustup-init" -y --no-modify-path --profile default --default-toolchain stable
+  rc=$?
+  run_step rm -rf "$tmp"
+  return $rc
+}
+
+# The Claude Code plugin marketplaces the dev plugins come from. A
+# marketplace is a catalogue: registering one installs nothing. hakpak's own
+# (.claude-plugin/marketplace.json in this repo) lists skills that are
+# published as a plain skill repo, so they install as plugins too; that
+# works where ~/.claude/skills is read-only, as in a Docker Sandbox. Adding
+# a marketplace you already have changes nothing.
+_install_claude_marketplaces() {
+  local source rc=0
+  _need_claude "the plugin marketplaces" || return 1
+  for source in trailofbits/skills trailofbits/skills-curated anthropics/skills "$HAKPAK_ROOT"; do
+    run_step claude plugin marketplace add "$source" || rc=1
   done
   return "$rc"
 }

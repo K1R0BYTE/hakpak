@@ -18,6 +18,7 @@ HAKPAK_TOOLSET="${HAKPAK_TOOLSET:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/
 # Sections in install and README order, as <id>:<README title>.
 HAKPAK_SECTIONS=(
   "top:Top"
+  "dev:Dev"
   "system:System"
   "environment:Environment"
   "basic:Basic"
@@ -32,7 +33,7 @@ HAKPAK_SECTIONS=(
   "rdp:RDP"
 )
 
-HAKPAK_KINDS=(apt go pipx gem git venv url custom)
+HAKPAK_KINDS=(apt go pipx gem git venv url uv plugin custom)
 
 # Field separator for the internal row format. Not tab: `read` collapses
 # runs of whitespace separators, which would drop empty fields.
@@ -120,6 +121,7 @@ toolset_check() {
       go) [ "${#src_args[@]}" -ge 1 ] || errs+=("line $n: $name: go needs a module@version") ;;
       git|venv) [ "${#src_args[@]}" -ge 1 ] || errs+=("line $n: $name: $kind needs a url") ;;
       url) [ "${#src_args[@]}" -ge 2 ] || errs+=("line $n: $name: url needs a url and a destination") ;;
+      plugin) [ "${#src_args[@]}" -ge 1 ] || errs+=("line $n: $name: plugin needs a marketplace") ;;
       custom)
         if [ "${#src_args[@]}" -lt 1 ]; then
           errs+=("line $n: $name: custom needs a function name")

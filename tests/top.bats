@@ -94,13 +94,13 @@ CLAUDE_FPR=31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE
 @test "top is the first section" {
   lib
   ids="$(for s in "${HAKPAK_SECTIONS[@]}"; do echo "${s%%:*}"; done | paste -sd' ')"
-  [[ "$ids " == "top system "* ]] || { echo "$ids"; return 1; }
+  [[ "$ids " == "top dev system "* ]] || { echo "$ids"; return 1; }
   run bash "$REPO/install/setup.sh" --help
   [[ "$output" == *"top "*"Top"* ]] || { echo "$output"; return 1; }
 }
 
 @test "the README names the top section and lists its tools" {
-  grep -q '^Sections: `top`, `system`,' "$REPO/README.md"
+  grep -q '^Sections: `top`, `dev`, `system`,' "$REPO/README.md"
   grep -qx '## Top' "$REPO/README.md"
   grep -q '^\* claude-code: ' "$REPO/README.md"
 }

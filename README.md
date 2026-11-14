@@ -34,9 +34,9 @@ bash setup.sh --dry-run all          # everything, without installing
 bash setup.sh --help                 # the section names
 ```
 
-Sections: `top`, `system`, `environment`, `basic`, `surfing`, `web`, `pentest`, `cloud`, `cicd`, `mitm`, `wordlists`, `wsl`, `rdp`. If one fails, the rest still run and `setup.sh` lists the failed sections at the end.
+Sections: `top`, `dev`, `system`, `environment`, `basic`, `surfing`, `web`, `pentest`, `cloud`, `cicd`, `mitm`, `wordlists`, `wsl`, `rdp`. If one fails, the rest still run and `setup.sh` lists the failed sections at the end.
 
-Run `setup.sh` as your normal user, not with sudo. Your user needs sudo rights; the scripts ask for your password only for the steps that need root (apt packages, `/usr/local`, `/etc`). Everything else installs as you: Go tools into `/opt/go`, pipx tools into `~/.local/bin`, and git tools into `/opt/<tool>`, owned by you.
+Run `setup.sh` as your normal user, not with sudo. Your user needs sudo rights; the scripts ask for your password only for the steps that need root (apt packages, `/usr/local`, `/etc`). Everything else installs as you: Go tools into `/opt/go`, pipx and uv tools into `~/.local/bin`, and git tools into `/opt/<tool>`, owned by you.
 
 When `setup.sh` has installed zsh (the `top` or `basic` section) and you ran it at a terminal, it ends by starting zsh, so you are in the new shell right away; `exit` goes back to the shell you started from. zsh also becomes your login shell, and one line added to `~/.bashrc` makes an interactive bash hand over to zsh, for places that start bash directly and never read the login shell (a container or sandbox shell). Scripts and `bash -c` are not touched, and a `bash` typed from zsh stays bash. `HAKPAK_NO_ZSH=1` switches both off.
 
@@ -49,6 +49,16 @@ If a tool fails to install, the rest keep going and each section lists what fail
 Re-running a section is safe. Your own dotfiles (`.zshrc`, `.tmux.conf`, `.dircolors`) are moved to `<file>.bak` once and replaced with links into `configs/`, so later runs change nothing. Configs under `/etc` (like `/etc/wsl.conf`) are copied, not linked, because root services read them. The curated `.zsh_history` is merged into your own history instead of linked, so Ctrl+R finds those commands and what you type stays local.
 
 The `top` section installs the [Claude Code](https://code.claude.com/docs/en/setup) CLI from Anthropic's signed apt repo, `stable` channel, after checking the repo key's fingerprint. If you already have `claude` (say, from the native installer), it is left as it is and only the skills are linked. Installed from apt it doesn't update itself: run `sudo apt update && sudo apt upgrade claude-code`. Start it with `claude` and sign in on first run.
+
+The `dev` section sets up a developer environment, based on the tools and configs of the Trail of Bits [devcontainer](https://github.com/trailofbits/skills/tree/main/plugins/devcontainer-setup) without the container: nothing in it builds or runs one, so it fits a machine that is already a sandbox.
+
+* Tools: ripgrep, fd, jq, delta, gh, shellcheck, shfmt, ast-grep, and the linters ruff, ty, zizmor, prek and actionlint.
+* Toolchains: Python 3.13 from uv, Node 22 from fnm with pnpm, Go, and stable Rust from rustup. They install into your home (`~/.local`, `~/.cargo`), next to what the system has. No installer script is piped into a shell: uv and rustup are checked against the checksum published with them, and fnm, which publishes none, is a pinned version with its hash kept in `install/custom.sh`.
+* Claude Code skills: it registers the plugin marketplaces `trailofbits/skills`, `trailofbits/skills-curated` and `anthropics/skills`, and installs the plugins listed under Dev below for your user. hakpak's own marketplace file (`.claude-plugin/marketplace.json`) lists Cloudflare's `security-audit-skill` as a plugin, so it installs the same way. `/plugin` in Claude Code shows the rest of each marketplace.
+* Configs: `system/.dev` puts the tool directories on PATH, turns on npm's safer defaults (no install scripts, no package younger than a day), and adds the aliases `sg` (ast-grep) and `claude-yolo` (`claude --dangerously-skip-permissions`). git gets delta as its pager through one `include` line in your `~/.gitconfig`, and a global ignore file if you have none; delete the include line to undo it.
+* Claude Code's `settings.json` is never written, and no permission mode is set for you. For a global `CLAUDE.md` and language rules, the section clones Trail of Bits' [claude-code-config](https://github.com/trailofbits/claude-code-config) to `/opt/claude-code-config`: run `claude` there, then `/trailofbits:config`.
+
+In a Docker Sandbox (sbx) the section does three things differently. The PATH line also goes into `/etc/sandbox-persistent.sh`, which every shell there and Claude Code's own commands read. Skills come from plugins only, since `~/.claude/skills` is the host's shared skills store and is read-only by default. And when a download fails, the summary names the `sbx policy` commands to run on the host, because the sandbox's network policy is the usual cause. A sandbox loses what `dev` installed when it is removed (`sbx rm`), not when it stops.
 
 To see what a section would do without changing anything:
 
@@ -72,9 +82,42 @@ Every tool is one row in [`install/toolset.txt`](install/toolset.txt): its secti
 * tpm (git)
 * claude-code: Claude Code CLI from Anthropic's apt repo (stable), with the skills from .claude/skills
 
-## System
+## Dev
 
 * build-essential (apt)
+* ripgrep (apt): rg, a faster grep
+* jq (apt)
+* git-delta (apt): the git pager, with the hakpak git config
+* gh (apt): GitHub CLI
+* shellcheck (apt)
+* shfmt (apt)
+* fd: fd-find from apt, linked as fd
+* uv: release binary, checksum checked
+* python: Python 3.13 from uv
+* ast-grep (uv): code search by syntax tree
+* ruff (uv): Python linter and formatter
+* ty (uv): Python type checker
+* zizmor (uv): GitHub Actions security audit
+* prek (uv): git hooks, a faster pre-commit
+* fnm: Node version manager, pinned release, checksum checked
+* node: Node 22 from fnm, with pnpm through corepack
+* go: latest Go from go.dev, in /usr/local/go
+* actionlint (go): GitHub Actions linter
+* rust: stable Rust with clippy and rustfmt, from rustup-init, checksum checked
+* claude-code: Claude Code CLI from Anthropic's apt repo (stable), with the skills from .claude/skills
+* claude-marketplaces: trailofbits/skills, trailofbits/skills-curated, anthropics/skills and hakpak's own
+* modern-python (plugin): uv, ruff, ty and pytest for Python projects
+* rust-review (plugin): Rust security review
+* gh-cli (plugin): sends GitHub fetches through gh
+* git-cleanup (plugin): sorts and cleans local branches and worktrees
+* property-based-testing (plugin)
+* static-analysis (plugin): CodeQL, Semgrep and SARIF
+* differential-review (plugin): security review of a diff
+* security-audit (plugin): Cloudflare's security-audit-skill
+* claude-code-config (git): Trail of Bits' Claude Code config; run claude there and /trailofbits:config
+
+## System
+
 * net-tools (apt)
 * bind9-dnsutils (apt)
 * nfs-common (apt)
