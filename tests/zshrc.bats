@@ -22,7 +22,8 @@ zshrc() {
 # --- dircolors ---
 
 @test "zsh starts without a dircolors warning when SHELL is unset" {
-  zshrc 'echo "colors=${LS_COLORS:+set}"'
+  # dircolors gives colors only for a terminal type the file names
+  TERM=xterm-256color zshrc 'echo "colors=${LS_COLORS:+set}"'
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [[ "$output" != *"dircolors"* ]] || { echo "$output"; return 1; }
   [[ "$output" == *"colors=set"* ]] || { echo "$output"; return 1; }
