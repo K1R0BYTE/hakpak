@@ -1,0 +1,75 @@
+# hakpak prompt theme: neon (the default). Solid purple and pink segments
+# with shaded edges, the command on its own line. Uses only characters every
+# terminal font has. Switch themes with `hakpak-theme <name>`.
+"$schema" = 'https://starship.rs/config-schema.json'
+
+palette = 'hakpak'
+add_newline = true
+
+# Only the modules named here are shown.
+format = '''
+[░▒▓](fg:deep)$username$hostname[▓▒░](fg:deep bg:violet)$directory[▓▒░](fg:violet)($git_branch$git_status[ ](bg:pink)[▓▒░](fg:pink))$python$status$cmd_duration
+$character'''
+
+[palettes.hakpak]
+ink = '#14071f'
+deep = '#3c096c'
+violet = '#7b2cbf'
+neon = '#c77dff'
+lilac = '#e0aaff'
+pink = '#ff2a9d'
+cyan = '#2de2e6'
+yellow = '#f9f002'
+red = '#ff3864'
+dim = '#8b7aa8'
+
+[username]
+show_always = true
+format = '[ $user]($style)'
+style_user = 'bold fg:lilac bg:deep'
+style_root = 'bold fg:yellow bg:deep'
+
+[hostname]
+ssh_only = false
+format = '[@$hostname ]($style)'
+style = 'bold fg:lilac bg:deep'
+
+[directory]
+format = '[ $path$read_only ]($style)'
+style = 'bold fg:#ffffff bg:violet'
+read_only = ' ro'
+truncation_symbol = '…/'
+truncation_length = 4
+truncate_to_repo = false
+
+[git_branch]
+format = '[░▒▓](fg:pink)[ $branch](bold fg:ink bg:pink)'
+
+[git_status]
+format = '([$all_status$ahead_behind](bold fg:ink bg:pink))'
+conflicted = ' =${count}'
+ahead = ' ⇡${count}'
+behind = ' ⇣${count}'
+diverged = ' ⇡${ahead_count}⇣${behind_count}'
+untracked = ' ?${count}'
+stashed = ''
+modified = ' !${count}'
+staged = ' +${count}'
+renamed = ' »${count}'
+deleted = ' ✘${count}'
+
+[python]
+format = '([ venv $virtualenv](fg:cyan))'
+
+[status]
+disabled = false
+format = '[ ✘ $status](bold fg:red)'
+
+[cmd_duration]
+min_time = 2000
+format = '[ took $duration](fg:dim)'
+
+[character]
+success_symbol = '[❯](bold fg:neon)'
+error_symbol = '[❯](bold fg:red)'
+vimcmd_symbol = '[❮](bold fg:cyan)'

@@ -88,6 +88,7 @@ Every tool is one row in [`install/toolset.txt`](install/toolset.txt): its secti
 * xclip (apt)
 * zsh (apt): with the hakpak config and history
 * oh-my-zsh: with zsh-syntax-highlighting and zsh-autosuggestions
+* starship: prompt for the hakpak themes, release binary, checksum checked
 * tmux (apt): with the hakpak config
 * tpm (git)
 
@@ -165,6 +166,25 @@ Every tool is one row in [`install/toolset.txt`](install/toolset.txt): its secti
 * dbus-x11 (apt)
 <!-- toolset:end -->
 
+# Themes
+
+zsh and tmux come in a purple and black look. The prompt is drawn by [Starship](https://starship.rs), which the `basic` section installs from its release (checksum checked); Starship was picked over Powerlevel10k because each theme is one small TOML file in `configs/starship/`. If Starship isn't installed, zsh keeps the oh-my-zsh `agnoster` theme.
+
+There are three themes, each with a matching tmux status bar in `configs/tmux/themes/`:
+
+- `neon` (the default): solid purple and pink segments with shaded edges.
+- `wireframe`: thin neon lines and colored text, no filled blocks.
+- `powerline`: arrow segments with icons. It needs a [Nerd Font](https://www.nerdfonts.com/font-downloads) set in your terminal, or the arrows and icons show as empty boxes. On WSL install the font on Windows and pick it in Windows Terminal (Settings, your profile, Appearance, Font face).
+
+```
+hakpak-theme                 # list the themes, the one in use marked *
+hakpak-theme wireframe       # switch
+```
+
+Switching changes the prompt of the shell you are in and the tmux status bar at once; other open shells follow when they next start. The choice is kept in `~/.config/hakpak/theme`, not in the repo. `neon` and `wireframe` work in any font. All three use 24-bit color, which Windows Terminal and most current terminals have, and expect a dark background: the black comes from your terminal's own color scheme. Command highlighting, suggestions and the Ctrl+R history search use the same palette.
+
+Each prompt shows user and host, the folder, the git branch with counts (`!` changed, `+` staged, `?` untracked), the time of a command that took over 2 seconds, and the exit code of a failed command.
+
 # MiTM
 
 Sample configs live in `configs/mitm/`:
@@ -212,7 +232,7 @@ Claude Code loads all four from a checkout of this repo.
 
 ```
 bats tests
-shellcheck -x install/*.sh tools/setup-router tools/gen-readme
+shellcheck -x install/*.sh tools/setup-router tools/gen-readme tools/hakpak-theme
 ```
 
 The tests fail if the README tool list doesn't match `install/toolset.txt`; `tools/gen-readme` updates it.

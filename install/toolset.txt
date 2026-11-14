@@ -37,6 +37,7 @@ basic  apt     p7zip-full
 basic  apt     xclip
 basic  apt     zsh                                # with the hakpak config and history
 basic  custom  oh-my-zsh  _install_oh_my_zsh      # with zsh-syntax-highlighting and zsh-autosuggestions
+basic  custom  starship  _install_starship        # prompt for the hakpak themes, release binary, checksum checked
 basic  apt     tmux                               # with the hakpak config
 basic  git     tpm  https://github.com/tmux-plugins/tpm  $HOME/.tmux/plugins/tpm
 

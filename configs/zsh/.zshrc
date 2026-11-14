@@ -9,6 +9,9 @@ export ZSH="${HOME}/.oh-my-zsh"
 # to know which specific one was loaded, run: echo $RANDOM_THEME
 # See https://github.com/ohmyzsh/ohmyzsh/wiki/Themes
 ZSH_THEME="agnoster"
+# With starship installed it draws the prompt instead (see the end of this
+# file), in the hakpak theme picked with `hakpak-theme`.
+command -v starship >/dev/null 2>&1 && ZSH_THEME=""
 eval `dircolors ~/.dircolors`
 
 export CDPATH=${HOME}/pentest:/opt/
@@ -73,7 +76,29 @@ COMPLETION_WAITING_DOTS="true"
 # Add wisely, as too many plugins slow down shell startup.
 plugins=(git zsh-syntax-highlighting zsh-autosuggestions fzf)
 
+# Suggestions in dim purple, to go with the prompt themes
+ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=#5b4a78'
+
 source $ZSH/oh-my-zsh.sh
+
+# Command highlighting and the fzf history search (Ctrl+R) in the same
+# purple palette as the prompt themes
+typeset -A ZSH_HIGHLIGHT_STYLES
+ZSH_HIGHLIGHT_STYLES[command]='fg=#2de2e6'
+ZSH_HIGHLIGHT_STYLES[builtin]='fg=#2de2e6'
+ZSH_HIGHLIGHT_STYLES[alias]='fg=#2de2e6'
+ZSH_HIGHLIGHT_STYLES[function]='fg=#2de2e6'
+ZSH_HIGHLIGHT_STYLES[precommand]='fg=#2de2e6,underline'
+ZSH_HIGHLIGHT_STYLES[unknown-token]='fg=#ff3864'
+ZSH_HIGHLIGHT_STYLES[single-hyphen-option]='fg=#e0aaff'
+ZSH_HIGHLIGHT_STYLES[double-hyphen-option]='fg=#e0aaff'
+ZSH_HIGHLIGHT_STYLES[single-quoted-argument]='fg=#c77dff'
+ZSH_HIGHLIGHT_STYLES[double-quoted-argument]='fg=#c77dff'
+ZSH_HIGHLIGHT_STYLES[globbing]='fg=#f9f002'
+ZSH_HIGHLIGHT_STYLES[comment]='fg=#8b7aa8'
+# (added once: a shell started from this one inherits it)
+[[ "${FZF_DEFAULT_OPTS:-}" == *"--color=fg:#d9cdf2"* ]] ||
+    export FZF_DEFAULT_OPTS="--color=fg:#d9cdf2,hl:#ff2a9d,fg+:#ffffff,bg+:#3c096c,hl+:#ff2a9d,info:#8b7aa8,prompt:#c77dff,pointer:#ff2a9d,marker:#2de2e6,spinner:#c77dff,header:#7b2cbf,border:#7b2cbf ${FZF_DEFAULT_OPTS:-}"
 
 # User configuration
 
@@ -112,3 +137,15 @@ fi
 for DOTFILE in "$HAKPAK_DIR"/system/.*; do
     [ -f "$DOTFILE" ] && . "$DOTFILE"
 done
+
+# Prompt theme: starship with the hakpak theme in use (neon unless you chose
+# another). `hakpak-theme` lists the themes and `hakpak-theme <name>`
+# switches: this shell at once, other open shells when they next start.
+hakpak-theme() {
+    "$HAKPAK_DIR/tools/hakpak-theme" "$@" || return
+    export STARSHIP_CONFIG="$("$HAKPAK_DIR/tools/hakpak-theme" --path starship)"
+}
+if command -v starship >/dev/null 2>&1; then
+    export STARSHIP_CONFIG="$("$HAKPAK_DIR/tools/hakpak-theme" --path starship)"
+    eval "$(starship init zsh)"
+fi
