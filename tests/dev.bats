@@ -378,7 +378,10 @@ DEV_TOOLS="build-essential ripgrep jq git-delta gh shellcheck shfmt fd uv python
 @test "system/.dev puts the cargo, fnm, Go and uv tool directories on PATH, once" {
   mkdir -p "$HOME/.cargo/bin" "$HOME/.local/share/fnm/aliases/default/bin" "$HOME/.local/bin"
   run env -i HOME="$HOME" PATH=/usr/bin:/bin bash -c '. "$1"; . "$1"; echo "$PATH"' _ "$REPO/system/.dev"
-  for d in "$HOME/.cargo/bin" "$HOME/.local/share/fnm/aliases/default/bin" "$HOME/.local/bin" /usr/local/go/bin; do
+  dirs=("$HOME/.cargo/bin" "$HOME/.local/share/fnm/aliases/default/bin" "$HOME/.local/bin")
+  # Go is in /usr/local/go only where it was installed
+  [ -d /usr/local/go/bin ] && dirs+=(/usr/local/go/bin)
+  for d in "${dirs[@]}"; do
     [ "$(tr ':' '\n' <<< "$output" | grep -cxF "$d")" -eq 1 ] || { echo "$d in $output"; return 1; }
   done
 }
@@ -399,7 +402,7 @@ DEV_TOOLS="build-essential ripgrep jq git-delta gh shellcheck shfmt fd uv python
 @test "system/.dev puts the Rust and Node installed here ahead of the system's" {
   mkdir -p "$HOME/.cargo/bin" "$HOME/.local/share/fnm/aliases/default/bin" "$HOME/.local/bin"
   run env -i HOME="$HOME" PATH=/usr/bin:/bin bash -c '. "$1"; echo "$PATH"' _ "$REPO/system/.dev"
-  [[ "$output" == "$HOME/.local/share/fnm/aliases/default/bin:$HOME/.cargo/bin:"*":/usr/bin:"* ]] || { echo "$output"; return 1; }
+  [[ "$output" == "$HOME/.local/share/fnm/aliases/default/bin:$HOME/.cargo/bin:"*"/usr/bin:"* ]] || { echo "$output"; return 1; }
   [[ "$output" == *":/usr/bin:"*":$HOME/.local/bin" ]] || { echo "$output"; return 1; }
 }
 
