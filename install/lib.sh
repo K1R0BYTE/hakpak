@@ -96,13 +96,13 @@ run_step() {
 
 # Run a step that isn't a tool install (config, service) and count a
 # failure in the summary: step <label> <command...>
-# link_config and merge_history are called directly: they send their own
+# link_config, merge_history and start_zsh_from_bash are called directly: they send their own
 # commands through run_step, so a dry run records what they would do.
 step() {
   local label="$1" rc
   shift
   case "$1" in
-    link_config|merge_history) "$@" ;;
+    link_config|merge_history|start_zsh_from_bash) "$@" ;;
     *) run_step "$@" ;;
   esac
   rc=$?
@@ -255,7 +255,73 @@ link_shell_configs() {
   if tmux info >/dev/null 2>&1; then
     step 'tmux reload' tmux source-file "${HOME}/.tmux.conf"
   fi
+  step 'zsh from bash' start_zsh_from_bash
   return 0
+}
+
+# Make an interactive bash hand over to zsh, by sourcing
+# configs/bash/start-zsh.bash from ~/.bashrc. The login shell is changed too
+# (see _use_zsh_as_login_shell), but a container or sandbox shell starts bash
+# directly and never reads it. One marked line is kept in ~/.bashrc: added
+# once, replaced if the clone has moved, and a .bashrc that is your own link
+# stays a link. HAKPAK_NO_ZSH=1 in your environment switches the hook off.
+_ZSH_HOOK_MARK='# hakpak: start zsh'
+start_zsh_from_bash() {
+  local rc="${HOME}/.bashrc" hook="$HAKPAK_ROOT/configs/bash/start-zsh.bash" line
+  [ -f "$hook" ] || { echo "no $hook"; return 1; }
+  printf -v line '[ -r %q ] && . %q  %s' "$hook" "$hook" "$_ZSH_HOOK_MARK"
+  if [ -f "$rc" ] && grep -qxF -- "$line" "$rc" &&
+      [ "$(grep -cF -- "$_ZSH_HOOK_MARK" "$rc")" -eq 1 ]; then
+    log_ok "$rc already starts zsh"
+    return 0
+  fi
+  run_step _set_marked_line "$rc" "$_ZSH_HOOK_MARK" "$line"
+}
+
+# Keep exactly one line with <mark> in <file>: drop any there, add <line> at
+# the end. The file is written in place, so a link stays a link.
+_set_marked_line() {
+  local file="$1" mark="$2" line="$3" tmp
+  tmp="$(mktemp "${TMPDIR:-/tmp}/hakpak.XXXXXXXX")" || return 1
+  if [ -e "$file" ]; then
+    grep -vF -- "$mark" "$file" > "$tmp"
+    [ "$?" -le 1 ] || { rm -f "$tmp"; return 1; }
+  fi
+  printf '%s\n' "$line" >> "$tmp" && cat "$tmp" > "$file"
+  local rc=$?
+  rm -f "$tmp"
+  return "$rc"
+}
+
+# The name of the shell that started setup.sh (bash, zsh, -zsh for a login
+# shell), or nothing when it can't be read.
+_parent_shell() {
+  if [ -n "${_HAKPAK_PARENT_SHELL:-}" ]; then
+    echo "$_HAKPAK_PARENT_SHELL"
+  else
+    cat "/proc/$PPID/comm" 2>/dev/null || true
+  fi
+}
+
+# Called last by setup.sh with the sections it installed: when zsh was among
+# them (basic, top) and you're at a terminal in another shell, replace setup
+# with zsh, so the new shell is there without logging out. `exit` goes back
+# to the shell setup was started from. Not in a dry run, not when you
+# already are in zsh, and not with HAKPAK_NO_ZSH=1.
+start_zsh_now() {
+  local zsh
+  _toolset_known top "$@" || _toolset_known basic "$@" || return 0
+  [ "${HAKPAK_DRY_RUN:-0}" != 1 ] || return 0
+  [ -z "${HAKPAK_NO_ZSH:-}" ] || return 0
+  [ -z "${HAKPAK_ZSH_STARTED:-}" ] || return 0
+  if [ "${_HAKPAK_TTY:-0}" != 1 ]; then
+    { [ -t 0 ] && [ -t 1 ]; } || return 0
+  fi
+  case "$(_parent_shell)" in zsh|-zsh) return 0 ;; esac
+  zsh="$(command -v zsh)" || return 0
+  "$zsh" -c exit >/dev/null 2>&1 || return 0
+  log_ok "Starting zsh. Type exit to go back to your old shell; HAKPAK_NO_ZSH=1 keeps setup and bash from starting it."
+  HAKPAK_ZSH_STARTED=1 SHELL="$zsh" exec "$zsh" -l
 }
 
 # Add the curated zsh history to yours: merge_history <configs/path> <target>

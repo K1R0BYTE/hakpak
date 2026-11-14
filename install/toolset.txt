@@ -2,7 +2,7 @@
 #
 #   section  kind  name  [source...]  # note shown in the README
 #
-# Sections: system environment basic top surfing web pentest cloud cicd mitm wordlists rdp
+# Sections: top system environment basic surfing web pentest cloud cicd mitm wordlists rdp
 # Kinds (see install/lib.sh): apt go pipx gem git venv url custom
 #   custom: the source is a function in install/custom.sh
 # In a source, $HOME and $HAKPAK_OPT are replaced; nothing else expands.
@@ -11,6 +11,18 @@
 # source in each; within a section, once.
 #
 # After editing, run tools/gen-readme to update the README tool list.
+
+# --- Top ---
+# First, and installable on its own: the shell tools of basic again, plus
+# Claude Code. A tool in two sections must have the same row in both.
+top  apt     vim
+top  apt     fzf                                  # Ctrl+R history search
+top  apt     zsh                                  # with the hakpak config and history
+top  custom  oh-my-zsh  _install_oh_my_zsh        # with zsh-syntax-highlighting and zsh-autosuggestions
+top  custom  starship  _install_starship          # prompt for the hakpak themes, release binary, checksum checked
+top  apt     tmux                                 # with the hakpak config
+top  git     tpm  https://github.com/tmux-plugins/tpm  $HOME/.tmux/plugins/tpm
+top  custom  claude-code  _install_claude_code    # Claude Code CLI from Anthropic's apt repo (stable), with the skills from .claude/skills
 
 # --- System ---
 system  apt  build-essential
@@ -43,18 +55,6 @@ basic  custom  oh-my-zsh  _install_oh_my_zsh      # with zsh-syntax-highlighting
 basic  custom  starship  _install_starship        # prompt for the hakpak themes, release binary, checksum checked
 basic  apt     tmux                               # with the hakpak config
 basic  git     tpm  https://github.com/tmux-plugins/tpm  $HOME/.tmux/plugins/tpm
-
-# --- Top ---
-# The shell tools of basic again, so top can be installed on its own, plus
-# Claude Code. A tool in two sections must have the same row in both.
-top  apt     vim
-top  apt     fzf                                  # Ctrl+R history search
-top  apt     zsh                                  # with the hakpak config and history
-top  custom  oh-my-zsh  _install_oh_my_zsh        # with zsh-syntax-highlighting and zsh-autosuggestions
-top  custom  starship  _install_starship          # prompt for the hakpak themes, release binary, checksum checked
-top  apt     tmux                                 # with the hakpak config
-top  git     tpm  https://github.com/tmux-plugins/tpm  $HOME/.tmux/plugins/tpm
-top  custom  claude-code  _install_claude_code    # Claude Code CLI from Anthropic's apt repo (stable), with the skills from .claude/skills
 
 # --- Surfing ---
 surfing  custom  firefox  _install_firefox        # firefox-esr on Debian, firefox on Ubuntu
