@@ -125,7 +125,7 @@ _link_claude_skills() {
   local dir name target to rc=0
   # Links to skills that are gone from this clone.
   for target in "$dest"/*; do
-    [ -L "$target" ] && [ ! -e "$target" ] || continue
+    if [ ! -L "$target" ] || [ -e "$target" ]; then continue; fi
     case "$(readlink "$target")" in
       "$src"/*) run_step rm -f "$target" || rc=1 ;;
     esac
