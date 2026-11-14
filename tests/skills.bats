@@ -41,6 +41,39 @@ frontmatter() {
   done
 }
 
+@test "skills: wslc-cli and wslc-arch are present" {
+  [ -f "$SKILLS/wslc-cli/SKILL.md" ]
+  [ -f "$SKILLS/wslc-arch/SKILL.md" ]
+}
+
+@test "skills: wslc-cli and wslc-arch point at each other" {
+  grep -q 'wslc-arch' "$SKILLS/wslc-cli/SKILL.md"
+  grep -q 'wslc-cli' "$SKILLS/wslc-arch/SKILL.md"
+}
+
+@test "skills: wslc skills say they were not run against a live wslc" {
+  for file in "$SKILLS"/wslc-cli/SKILL.md "$SKILLS"/wslc-arch/SKILL.md; do
+    grep -q 'live `wslc.exe`' "$file" || { echo "$file: no live-run caveat"; return 1; }
+  done
+}
+
+@test "skills: no command wslc rejects is recommended" {
+  # -h is --hostname, not help; host networking and the on-failure and
+  # unless-stopped restart policies are refused. Each may appear only on a
+  # line that says so.
+  for file in "$SKILLS"/wslc-cli/SKILL.md "$SKILLS"/wslc-arch/SKILL.md; do
+    if grep -n -e '--network host' "$file" | grep -v -e 'rejected' -e 'Not supported'; then
+      echo "$file: recommends --network host"; return 1
+    fi
+    if grep -n -e 'unless-stopped' "$file" | grep -v -e 'rejected' -e 'Only `no` and `always`'; then
+      echo "$file: recommends an unsupported restart policy"; return 1
+    fi
+    if grep -n -E 'wslc( [a-z]+)* -h( |`|$)' "$file"; then
+      echo "$file: uses -h as help"; return 1
+    fi
+  done
+}
+
 @test "skills: sbx-cli and sbx-arch point at each other" {
   grep -q 'sbx-arch' "$SKILLS/sbx-cli/SKILL.md"
   grep -q 'sbx-cli' "$SKILLS/sbx-arch/SKILL.md"

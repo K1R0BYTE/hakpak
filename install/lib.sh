@@ -242,6 +242,22 @@ _copy_config() {
   _run_at "$target" install -m 644 "$src" "$target"
 }
 
+# The shell configs: .zshrc, .dircolors, .tmux.conf and the curated history.
+# The basic and top sections both install zsh and tmux, so both call this.
+# Your own files are backed up once, re-runs change nothing.
+link_shell_configs() {
+  step .zshrc link_config zsh/.zshrc "${HOME}/.zshrc"
+  step .dircolors link_config .dircolors "${HOME}/.dircolors"
+  # History is merged, not linked, so new commands stay out of the repo.
+  step .zsh_history merge_history zsh/.zsh_history "${HOME}/.zsh_history"
+  step .tmux.conf link_config tmux/.tmux.conf "${HOME}/.tmux.conf"
+  # Reload only if a tmux server is running.
+  if tmux info >/dev/null 2>&1; then
+    step 'tmux reload' tmux source-file "${HOME}/.tmux.conf"
+  fi
+  return 0
+}
+
 # Add the curated zsh history to yours: merge_history <configs/path> <target>
 # Your history is kept and stays last (so Ctrl+R finds your own commands
 # first), curated entries you don't already have go before it, and nothing
@@ -417,6 +433,9 @@ verify_sha256() {
   local file="$1" sums="$2" asset="${3:-}" expected actual
   if [ -n "$asset" ]; then
     expected="$(awk -v a="$asset" '$2 == a || $2 == "*" a { print $1; exit }' "$sums")"
+    # A checksum file for a single asset may hold only the hash, no name.
+    [ -n "$expected" ] ||
+      expected="$(awk 'NF { n++; if (NF == 1) h = $1 } END { if (n == 1) print h }' "$sums")"
   else
     expected="$(awk 'NF { print $1; exit }' "$sums")"
   fi

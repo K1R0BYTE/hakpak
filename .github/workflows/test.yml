@@ -13,9 +13,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Install bats and shellcheck
-        run: sudo apt-get update && sudo apt-get install -y bats shellcheck
+      - name: Install bats, shellcheck, and zsh and tmux for the theme tests
+        run: sudo apt-get update && sudo apt-get install -y bats shellcheck zsh tmux
       - name: shellcheck
-        run: shellcheck -x install/*.sh tools/setup-router tools/gen-readme
+        run: shellcheck -x install/*.sh tools/setup-router tools/gen-readme tools/hakpak-theme
       - name: bats (dry run, installs nothing)
         run: bats tests

@@ -80,17 +80,18 @@ CLAUDE_FPR=31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE
 
 # --- the section in the manifest ---
 
-@test "top section lists vim, fzf, zsh, oh-my-zsh, tmux, tpm and claude-code" {
+@test "top section lists vim, fzf, zsh, oh-my-zsh, starship, tmux, tpm and claude-code" {
   lib
-  [ "$(toolset_rows top | cut -f3 | paste -sd' ')" = "vim fzf zsh oh-my-zsh tmux tpm claude-code" ]
+  [ "$(toolset_rows top | cut -f3 | paste -sd' ')" = "vim fzf zsh oh-my-zsh starship tmux tpm claude-code" ]
 }
 
-@test "basic section keeps only the tools that didn't move to top" {
+@test "the tools are copied to top: basic still lists every one of them" {
   lib
-  [ "$(toolset_rows basic | cut -f3 | paste -sd' ')" = "git wget curl zip unzip p7zip-full xclip" ]
+  [ "$(toolset_rows basic | cut -f3 | paste -sd' ')" = "git vim wget curl fzf zip unzip p7zip-full xclip zsh oh-my-zsh starship tmux tpm" ]
+  toolset_check
 }
 
-@test "top comes right after basic, which installs the git and curl it needs" {
+@test "top comes right after basic" {
   lib
   ids="$(for s in "${HAKPAK_SECTIONS[@]}"; do echo "${s%%:*}"; done | paste -sd' ')"
   [[ " $ids " == *" basic top "* ]] || { echo "$ids"; return 1; }
@@ -133,14 +134,21 @@ CLAUDE_FPR=31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE
   recorded "_merge_history_into $REPO/configs/zsh/.zsh_history $HOME/.zsh_history"
 }
 
-@test "basic section no longer installs the shell tools or their configs" {
+@test "basic section still installs the shell tools and their configs" {
   section basic.sh
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-  recorded "apt-get install -y git wget curl zip unzip p7zip-full xclip"
-  not_recorded "ohmyzsh"
-  not_recorded ".zshrc"
-  not_recorded ".tmux.conf"
-  not_recorded ".zsh_history"
+  recorded "apt-get install -y git vim wget curl fzf zip unzip p7zip-full xclip zsh tmux"
+  recorded "ohmyzsh"
+  recorded "ln -sfn $REPO/configs/zsh/.zshrc $HOME/.zshrc"
+  recorded "ln -sfn $REPO/configs/tmux/.tmux.conf $HOME/.tmux.conf"
+  recorded "_merge_history_into $REPO/configs/zsh/.zsh_history $HOME/.zsh_history"
+  not_recorded "claude-code"
+}
+
+@test "basic and top together install cleanly" {
+  run bash "$REPO/install/setup.sh" --dry-run basic top
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [[ "$output" == *"== Section: basic"*"== Section: top"* ]]
 }
 
 # --- Claude Code ---

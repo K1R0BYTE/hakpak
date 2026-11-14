@@ -7,6 +7,9 @@
 #   custom: the source is a function in install/custom.sh
 # In a source, $HOME and $HAKPAK_OPT are replaced; nothing else expands.
 #
+# A tool may be listed in more than one section, with the same kind and
+# source in each; within a section, once.
+#
 # After editing, run tools/gen-readme to update the README tool list.
 
 # --- System ---
@@ -26,19 +29,29 @@ environment  apt     jython
 environment  custom  go  _install_go_toolchain  # latest Go from go.dev, in /usr/local/go
 
 # --- Basic ---
-basic  apt  git
-basic  apt  wget
-basic  apt  curl
-basic  apt  zip
-basic  apt  unzip
-basic  apt  p7zip-full
-basic  apt  xclip
+basic  apt     git
+basic  apt     vim
+basic  apt     wget
+basic  apt     curl
+basic  apt     fzf                                # Ctrl+R history search
+basic  apt     zip
+basic  apt     unzip
+basic  apt     p7zip-full
+basic  apt     xclip
+basic  apt     zsh                                # with the hakpak config and history
+basic  custom  oh-my-zsh  _install_oh_my_zsh      # with zsh-syntax-highlighting and zsh-autosuggestions
+basic  custom  starship  _install_starship        # prompt for the hakpak themes, release binary, checksum checked
+basic  apt     tmux                               # with the hakpak config
+basic  git     tpm  https://github.com/tmux-plugins/tpm  $HOME/.tmux/plugins/tpm
 
 # --- Top ---
+# The shell tools of basic again, so top can be installed on its own, plus
+# Claude Code. A tool in two sections must have the same row in both.
 top  apt     vim
 top  apt     fzf                                  # Ctrl+R history search
 top  apt     zsh                                  # with the hakpak config and history
 top  custom  oh-my-zsh  _install_oh_my_zsh        # with zsh-syntax-highlighting and zsh-autosuggestions
+top  custom  starship  _install_starship          # prompt for the hakpak themes, release binary, checksum checked
 top  apt     tmux                                 # with the hakpak config
 top  git     tpm  https://github.com/tmux-plugins/tpm  $HOME/.tmux/plugins/tpm
 top  custom  claude-code  _install_claude_code    # Claude Code CLI from Anthropic's apt repo (stable), with the skills from .claude/skills

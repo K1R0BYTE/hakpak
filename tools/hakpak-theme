@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# Show or switch the hakpak shell theme: the Starship prompt
+# (configs/starship/<name>.toml) and the tmux status bar
+# (configs/tmux/themes/<name>.conf).
+#
+#   hakpak-theme                       list the themes, the one in use marked *
+#   hakpak-theme <name>                switch to a theme
+#   hakpak-theme --path starship|tmux  print the file of the theme in use
+#
+# The choice is one word in ~/.config/hakpak/theme (or under
+# $XDG_CONFIG_HOME), so the repo stays clean. Without a choice, or with one
+# that names no theme, the theme is neon. zsh wraps this in a function of the
+# same name (configs/zsh/.zshrc) that also updates the prompt of the shell
+# you are in; other open shells pick the theme up when they start.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+PROMPTS="$ROOT/configs/starship"
+BARS="$ROOT/configs/tmux/themes"
+STATE="${XDG_CONFIG_HOME:-$HOME/.config}/hakpak/theme"
+DEFAULT=neon
+
+# A theme is a plain name with a prompt file. Anything else (a path, an
+# option, an empty name) is not a theme.
+is_theme() {
+  [[ "$1" =~ ^[a-z0-9][a-z0-9-]*$ ]] && [ -f "$PROMPTS/$1.toml" ]
+}
+
+themes() {
+  local f
+  for f in "$PROMPTS"/*.toml; do
+    f="${f##*/}"
+    echo "${f%.toml}"
+  done
+}
+
+current() {
+  local name=""
+  if [ -f "$STATE" ]; then
+    name="$(cat "$STATE" 2>/dev/null)" || name=""
+  fi
+  if is_theme "$name"; then
+    echo "$name"
+  else
+    echo "$DEFAULT"
+  fi
+}
+
+list() {
+  local now t
+  now="$(current)"
+  for t in $(themes); do
+    if [ "$t" = "$now" ]; then
+      echo "* $t"
+    else
+      echo "  $t"
+    fi
+  done
+}
+
+usage() {
+  cat <<USAGE
+usage: hakpak-theme [<name> | --path starship|tmux]
+
+Themes:
+$(list)
+USAGE
+}
+
+switch() {
+  local name="$1"
+  if ! is_theme "$name"; then
+    echo "unknown theme: $name" >&2
+    echo "Themes: $(themes | paste -sd' ')" >&2
+    return 1
+  fi
+  mkdir -p "$(dirname "$STATE")"
+  printf '%s\n' "$name" > "$STATE"
+  # Restyle a running tmux server; without one there is nothing to do.
+  if [ -f "$BARS/$name.conf" ] && command -v tmux >/dev/null 2>&1; then
+    tmux source-file "$BARS/$name.conf" >/dev/null 2>&1 || true
+  fi
+  echo "Theme: $name"
+}
+
+if [ "$#" -eq 0 ]; then
+  list
+  exit 0
+fi
+case "$1" in
+  -h|--help) usage ;;
+  --path)
+    case "${2-}" in
+      starship) echo "$PROMPTS/$(current).toml" ;;
+      tmux)
+        # A theme without a status bar of its own gets the default one.
+        bar="$BARS/$(current).conf"
+        [ -f "$bar" ] || bar="$BARS/$DEFAULT.conf"
+        echo "$bar"
+        ;;
+      *) usage >&2; exit 2 ;;
+    esac
+    ;;
+  *) switch "$1" ;;
+esac

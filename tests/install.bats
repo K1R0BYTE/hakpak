@@ -298,6 +298,14 @@ section() {
   rm -rf "$d"
 }
 
+@test "basic section installs oh-my-zsh by git clone, then its plugins" {
+  HOME="$BATS_TEST_TMPDIR/home"
+  mkdir -p "$HOME"
+  section basic.sh
+  recorded "git clone --depth 1 https://github.com/ohmyzsh/ohmyzsh.git $HOME/.oh-my-zsh"
+  recorded "zsh-autosuggestions"
+}
+
 # --- Surfing and MiTM sections ---
 
 @test "surfing section installs the browsers" {

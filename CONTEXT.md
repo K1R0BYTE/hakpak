@@ -18,6 +18,8 @@
 
 **Skills**: the agent skills kept in `.claude/skills`, one directory with a `SKILL.md` each. The Top section links each into `~/.claude/skills` (`_link_claude_skills`) when it installs Claude Code; a skill of the same name you already have is kept.
 
+**Theme**: a named look for the shell: a Starship prompt config `configs/starship/<name>.toml` and a tmux status bar `configs/tmux/themes/<name>.conf`. `tools/hakpak-theme <name>` picks one (`neon` by default); the choice is one word in `~/.config/hakpak/theme`, read by `.zshrc` and `.tmux.conf`, so the repo stays clean.
+
 **History merge**: the curated `configs/zsh/.zsh_history` is added to your own history by `merge_history`, never linked, so new commands stay out of the repo.
 
 **Repo root**: wherever hakpak is cloned. Scripts find it from their own path (`HAKPAK_ROOT`), not from a fixed `~/.hakpak`.
