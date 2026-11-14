@@ -21,7 +21,10 @@
 #   custom <name> <function>          call a function (install/custom.sh) that uses `run_step`
 #
 # One failing tool doesn't stop the section; install_summary lists the
-# failures and returns non-zero.
+# failures and returns non-zero. Each install's output is kept until it is
+# judged, so the summary can name a cause it recognizes: a refused download
+# (HTTP 403; in a sandbox, the `sbx policy` commands) or an out-of-date
+# mirror. apt_install retries once after a mismatch with apt's index.
 #
 # Configs (files in configs/) go into place with:
 #   link_config   <configs/path> <target>   symlink in $HOME, copy under /etc
@@ -63,6 +66,12 @@ esac
 export PATH
 
 HAKPAK_FAILED=()
+# Failed tools whose output showed why (install_summary prints a hint):
+# a request the network refused (HTTP 403), or apt files that don't match
+# the index (a stale mirror or proxy cache).
+HAKPAK_BLOCKED=()
+HAKPAK_STALE=()
+HAKPAK_APT_STALE=0
 
 _RED="\033[1;31m"
 _GREEN="\033[1;32m"
@@ -101,19 +110,80 @@ run_step() {
 # link_config, merge_history, start_zsh_from_bash and the dev config steps are called directly: they send their own
 # commands through run_step, so a dry run records what they would do.
 step() {
-  local label="$1" rc
+  local label="$1" rc=0 out
   shift
+  HAKPAK_APT_STALE=0
+  out="$(_new_output_dir)"
   case "$1" in
-    link_config|merge_history|start_zsh_from_bash|link_dev_git_config|persist_dev_env_in_sbx) "$@" ;;
-    *) run_step "$@" ;;
+    link_config|merge_history|start_zsh_from_bash|link_dev_git_config|persist_dev_env_in_sbx) _tee_output "$out" "$@" || rc=$? ;;
+    *) _tee_output "$out" run_step "$@" || rc=$? ;;
   esac
-  rc=$?
   if [ "$rc" -eq 0 ]; then
+    _drop_output "$out"
     return 0
   fi
   echo "failed: $label"
   HAKPAK_FAILED+=("$label")
+  _note_why_failed "$label" "$out"
   return 1
+}
+
+# A private dir (mode 700) for one install's output. Not run_step: it is
+# hakpak's own scratch space, made in a dry run too, and removed once the
+# install is judged.
+_new_output_dir() {
+  mktemp -d "${TMPDIR:-/tmp}/hakpak-output.XXXXXXXX"
+}
+
+_drop_output() {
+  [ -n "$1" ] && rm -rf -- "$1"
+  return 0
+}
+
+# Run a command in this shell (so the variables it sets stay set), show its
+# output, and keep a copy in <dir>/log: _tee_output <dir> <command...>
+# stdout and stderr stay apart, each through its own tee and fifo. The tees
+# are background jobs, so their PIDs are known and waited on, also when
+# calls nest.
+_tee_output() {
+  local dir="$1" rc=0 out_pid err_pid
+  shift
+  if [ -z "$dir" ] || ! mkfifo "$dir/out" "$dir/err" 2>/dev/null; then
+    "$@"
+    return
+  fi
+  tee -a "$dir/log" < "$dir/out" &
+  out_pid=$!
+  tee -a "$dir/log" < "$dir/err" >&2 &
+  err_pid=$!
+  "$@" > "$dir/out" 2> "$dir/err" || rc=$?
+  wait "$out_pid" "$err_pid"
+  rm -f "$dir/out" "$dir/err"
+  return "$rc"
+}
+
+# The network refused a request: an HTTP 403 from apt, curl, git or a
+# package tool, or the body of a sandbox policy block. A bare "403" isn't
+# enough ("[403 kB]").
+_output_blocked() {
+  grep -Eqi '403 +Forbidden|error: 403|response 403|returned 403|status( code)?:? 403|HTTP/[0-9.]+ 403|\bE403\b|Approval required for |Blocked by (local rule|org policy|network policy)' "$1/log" 2>/dev/null
+}
+
+# apt downloaded a file that doesn't match its index.
+_output_stale() {
+  grep -Eq 'File has unexpected size|Hash Sum mismatch|Mirror sync in progress' "$1/log" 2>/dev/null
+}
+
+# Stale only when apt's last attempt was: the first one's mismatch is still
+# in the log after a retry that failed for another reason.
+_note_why_failed() {
+  local name="$1" out="$2"
+  if _output_blocked "$out"; then
+    HAKPAK_BLOCKED+=("$name")
+  elif [ "${HAKPAK_APT_STALE:-0}" = 1 ]; then
+    HAKPAK_STALE+=("$name")
+  fi
+  _drop_output "$out"
 }
 
 # A private temp dir (mode 700). In dry run, a placeholder path is returned
@@ -541,8 +611,32 @@ need_command() {
   has_command "$1" || apt_install "${2:-$1}"
 }
 
+# A package that doesn't match apt's index ("Mirror sync in progress?") is
+# often a mirror or proxy cache caught mid-update: clean apt's cache, read
+# the lists again and try once more. HAKPAK_APT_STALE says whether the last
+# attempt still didn't match. _HAKPAK_APT_NO_RETRY=1 skips the retry (the
+# per-package fallback after a group install that already retried).
 apt_install() {
-  run_step sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"
+  local out rc=0
+  out="$(_new_output_dir)"
+  HAKPAK_APT_STALE=0
+  _tee_output "$out" run_step sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y "$@" || rc=$?
+  if [ "$rc" -ne 0 ] && _output_stale "$out"; then
+    HAKPAK_APT_STALE=1
+    if [ "${_HAKPAK_APT_NO_RETRY:-0}" != 1 ]; then
+      log "A download didn't match apt's index; cleaning apt's cache and trying again"
+      _drop_output "$out"
+      out="$(_new_output_dir)"
+      rc=0
+      { run_step sudo apt-get clean &&
+        run_step sudo apt-get update &&
+        _tee_output "$out" run_step sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"; } || rc=$?
+      HAKPAK_APT_STALE=0
+      [ "$rc" -ne 0 ] && _output_stale "$out" && HAKPAK_APT_STALE=1
+    fi
+  fi
+  _drop_output "$out"
+  return "$rc"
 }
 
 _install_apt() {
@@ -812,11 +906,16 @@ install_tool() {
       ;;
   esac
   log "Installing $name"
-  if "_install_$kind" "$name" "$@"; then
+  local out
+  HAKPAK_APT_STALE=0
+  out="$(_new_output_dir)"
+  if _tee_output "$out" "_install_$kind" "$name" "$@"; then
+    _drop_output "$out"
     return 0
   fi
   echo "failed: $name"
   HAKPAK_FAILED+=("$name")
+  _note_why_failed "$name" "$out"
   return 1
 }
 
@@ -832,11 +931,15 @@ install_summary() {
     return 0
   fi
   log "Failed to install: ${HAKPAK_FAILED[*]}"
-  if is_sbx; then
+  if [ "${#HAKPAK_STALE[@]}" -gt 0 ]; then
+    echo "${HAKPAK_STALE[*]}: apt got a file that doesn't match its index, even after a retry."
+    echo "The mirror, or a proxy cache on the way, is out of date. Run this section again later."
+  fi
+  if [ "${#HAKPAK_BLOCKED[@]}" -gt 0 ] && is_sbx; then
     # The name goes into a command to copy: print it only when it is plain.
     local box="SANDBOX"
     [[ "$SANDBOX_NAME" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] && box="$SANDBOX_NAME"
-    echo "This is a sandbox: a failed download is often its network policy (an HTTP 403)."
+    echo "${HAKPAK_BLOCKED[*]}: the sandbox's network policy refused a download (HTTP 403)."
     echo "On the host, see what was blocked and allow the host you need, then run this section again:"
     echo "  sbx policy log $box"
     echo "  sbx policy allow network --sandbox $box HOST"
