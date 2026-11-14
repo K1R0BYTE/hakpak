@@ -410,6 +410,9 @@ verify_sha256() {
   local file="$1" sums="$2" asset="${3:-}" expected actual
   if [ -n "$asset" ]; then
     expected="$(awk -v a="$asset" '$2 == a || $2 == "*" a { print $1; exit }' "$sums")"
+    # A checksum file for a single asset may hold only the hash, no name.
+    [ -n "$expected" ] ||
+      expected="$(awk 'NF { n++; if (NF == 1) h = $1 } END { if (n == 1) print h }' "$sums")"
   else
     expected="$(awk 'NF { print $1; exit }' "$sums")"
   fi

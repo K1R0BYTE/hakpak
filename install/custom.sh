@@ -89,6 +89,28 @@ _install_oh_my_zsh() {
   return 0
 }
 
+# Starship, the prompt that draws the hakpak themes (configs/starship), from
+# its release tarball, checked against the release's checksum. Debian 12 and
+# Ubuntu before 25.04 have no apt package. Without it zsh keeps the
+# oh-my-zsh theme.
+_install_starship() {
+  local arch tag asset
+  if has_command starship; then
+    log_ok "starship already installed"
+    return 0
+  fi
+  case "$(uname -m)" in
+    x86_64) arch=x86_64 ;;
+    aarch64|arm64) arch=aarch64 ;;
+    *) echo "starship: hakpak has no build for $(uname -m)"; return 1 ;;
+  esac
+  tag="$(_github_latest_tag starship/starship)" || return 1
+  asset="starship-$arch-unknown-linux-musl.tar.gz"
+  _install_release_binary starship \
+    "https://github.com/starship/starship/releases/download/$tag" \
+    "$asset" "$asset.sha256"
+}
+
 # --- Surfing ---
 
 # Debian ships firefox-esr; Ubuntu ships firefox.
