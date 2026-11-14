@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# System section: base packages every other section relies on.
+# System section: network tools and the clients for NFS and SMB shares.
 # Tools are listed in install/toolset.txt.
 # shellcheck source=install/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"

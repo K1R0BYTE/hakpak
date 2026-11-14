@@ -16,6 +16,8 @@
 #   git    <name> <url> [dest]        shallow clone to dest, default $HAKPAK_OPT/<name>
 #   venv   <name> <url>               git clone + .venv + pip install -r requirements.txt
 #   url    <name> <url> <dest>        download one file (skips if dest exists)
+#   uv     <name> [package]           uv tool install (skips if the command exists)
+#   plugin <name> <marketplace>       claude plugin install <name>@<marketplace>
 #   custom <name> <function>          call a function (install/custom.sh) that uses `run_step`
 #
 # One failing tool doesn't stop the section; install_summary lists the
@@ -96,13 +98,13 @@ run_step() {
 
 # Run a step that isn't a tool install (config, service) and count a
 # failure in the summary: step <label> <command...>
-# link_config, merge_history and start_zsh_from_bash are called directly: they send their own
+# link_config, merge_history, start_zsh_from_bash and the dev config steps are called directly: they send their own
 # commands through run_step, so a dry run records what they would do.
 step() {
   local label="$1" rc
   shift
   case "$1" in
-    link_config|merge_history|start_zsh_from_bash) "$@" ;;
+    link_config|merge_history|start_zsh_from_bash|link_dev_git_config|persist_dev_env_in_sbx) "$@" ;;
     *) run_step "$@" ;;
   esac
   rc=$?
@@ -257,6 +259,102 @@ link_shell_configs() {
   fi
   step 'zsh from bash' start_zsh_from_bash
   return 0
+}
+
+# The git config of the dev section: delta as the pager, by one include of
+# configs/git/dev.gitconfig in your ~/.gitconfig, and a global ignore file
+# when you have none. Your own file is not replaced, but the include comes
+# last, so it wins over a pager you set; delete the include line to undo it.
+# Without delta nothing is included: git would fail to start its pager.
+link_dev_git_config() {
+  local conf="$HAKPAK_ROOT/configs/git/dev.gitconfig" ignore="$HAKPAK_ROOT/configs/git/gitignore"
+  if [ "${HAKPAK_DRY_RUN:-0}" != "1" ] && ! has_command delta; then
+    log "delta is not installed: leaving your git config alone"
+    return 0
+  fi
+  has_command git || [ "${HAKPAK_DRY_RUN:-0}" = "1" ] || { echo "git is not installed"; return 1; }
+  # A dry run reads nothing of yours: it records both steps.
+  if [ "${HAKPAK_DRY_RUN:-0}" = "1" ]; then
+    run_step git config --global --add include.path "$conf"
+    run_step git config --global core.excludesFile "$ignore"
+    return 0
+  fi
+  if git config --global --get-all include.path 2>/dev/null | grep -qxF -- "$conf"; then
+    log_ok "git already includes $conf"
+  else
+    run_step git config --global --add include.path "$conf" || return 1
+  fi
+  if [ -z "$(git config --global --get core.excludesFile 2>/dev/null)" ]; then
+    run_step git config --global core.excludesFile "$ignore" || return 1
+  fi
+}
+
+# In a Docker Sandbox every shell, and Claude Code before each command it
+# runs, sources /etc/sandbox-persistent.sh. One marked line there sources
+# system/.dev, so the agent finds cargo, node, go and the uv tools, which a
+# .zshrc alone would not give it. Added once, replaced if the clone moved.
+_SBX_ENV_MARK='# hakpak: dev tools'
+persist_dev_env_in_sbx() {
+  local file="$HAKPAK_SYSROOT/etc/sandbox-persistent.sh" env="$HAKPAK_ROOT/system/.dev" line
+  # An `if`, not `[ -r ] &&`: with the clone gone the line must still
+  # succeed, or a shell that stops on errors would stop at this file.
+  printf -v line 'if [ -r %q ]; then . %q; fi  %s' "$env" "$env" "$_SBX_ENV_MARK"
+  if grep -qxF -- "$line" "$file" 2>/dev/null &&
+      [ "$(grep -cF -- "$_SBX_ENV_MARK" "$file")" -eq 1 ]; then
+    log_ok "$file already loads the dev environment"
+    return 0
+  fi
+  run_step _rewrite_with_marked_line "$file" "$_SBX_ENV_MARK" "$line"
+}
+
+# Keep exactly one line with <mark> in <file>, as _set_marked_line does, but
+# write the new text into the file itself: a file a sandbox mounts into
+# place can't be replaced by a rename. With sudo when the file isn't yours.
+_rewrite_with_marked_line() {
+  local file="$1" mark="$2" line="$3" tmp rc
+  tmp="$(mktemp "${TMPDIR:-/tmp}/hakpak.XXXXXXXX")" || return 1
+  grep -vF -- "$mark" "$file" > "$tmp"
+  if [ "$?" -gt 1 ]; then
+    rm -f "$tmp"
+    return 1
+  fi
+  printf '%s\n' "$line" >> "$tmp" || { rm -f "$tmp"; return 1; }
+  if [ -w "$file" ]; then
+    cat "$tmp" > "$file"
+  else
+    # shellcheck disable=SC2024 # the temp file is yours to read; only the write needs root
+    sudo tee "$file" < "$tmp" > /dev/null
+  fi
+  rc=$?
+  rm -f "$tmp"
+  return "$rc"
+}
+
+# The configs of the dev section: git, and in a sandbox its environment file.
+# The shell part, system/.dev, needs no step: .zshrc sources every file in
+# system/.
+link_dev_configs() {
+  step 'git config' link_dev_git_config
+  if is_sbx; then
+    step 'sandbox environment' persist_dev_env_in_sbx
+  fi
+  return 0
+}
+
+# What the dev section leaves to you: the Claude Code config (CLAUDE.md and
+# language rules) is Trail of Bits' own, installed by a command in their
+# repo, which the section cloned.
+dev_hint() {
+  local dir="$HAKPAK_OPT/claude-code-config"
+  echo
+  # Only when the clone is there (a dry run assumes it).
+  if [ -d "$dir/.git" ] || [ "${HAKPAK_DRY_RUN:-0}" = "1" ]; then
+    log_ok "For the Claude Code config (CLAUDE.md, language rules): cd $dir && claude, then run /trailofbits:config"
+    if is_sbx; then
+      echo "This is a sandbox: leave its settings.json unticked there. It denies sudo, and ~/.claude/settings.json here already holds the sandbox's own key helper and permission mode."
+    fi
+  fi
+  echo "Open a new shell (or log out and in) for the new PATH: the tools in ~/.cargo/bin, ~/.local/bin and fnm's Node."
 }
 
 # Make an interactive bash hand over to zsh, by sourcing
@@ -417,6 +515,12 @@ is_wsl() {
     [ -e "$HAKPAK_SYSROOT/proc/sys/fs/binfmt_misc/WSLInterop" ]
 }
 
+# True inside a Docker Sandbox (sbx): it names itself in $SANDBOX_NAME and
+# has the environment file every shell there sources.
+is_sbx() {
+  [ -n "${SANDBOX_NAME:-}" ] && [ -f "$HAKPAK_SYSROOT/etc/sandbox-persistent.sh" ]
+}
+
 # True if a wsl.conf turns on systemd: systemd=true under [boot], any case,
 # spaces around the = allowed. False for a missing file.
 wsl_conf_has_systemd() {
@@ -514,6 +618,42 @@ _install_url() {
   fi
   ensure_dir "$(dirname "$dest")" &&
     run_step curl -fsSL -o "$dest" "$url"
+}
+
+# A Python command line tool in its own environment, with its command in
+# ~/.local/bin. The package is the name unless given (ast-grep is
+# ast-grep-cli on PyPI).
+_install_uv() {
+  local name="$1" package="${2:-$1}"
+  if has_command "$name"; then
+    log_ok "$name already installed"
+    return 0
+  fi
+  run_step uv tool install "$package"
+}
+
+# True when Claude Code is there to run plugin commands. A dry run records
+# them without it.
+_need_claude() {
+  [ "${HAKPAK_DRY_RUN:-0}" = "1" ] && return 0
+  has_command claude && return 0
+  echo "$1 needs Claude Code (the claude command); install the claude-code tool first"
+  return 1
+}
+
+# A Claude Code plugin from a registered marketplace, for you in every
+# project (user scope). Installing one you already have changes nothing.
+# Both names end up in one argument of a command, so only plain names pass.
+_install_plugin() {
+  local name="$1" marketplace="${2:-}" part
+  for part in "$name" "$marketplace"; do
+    if ! [[ "$part" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+      echo "plugin: needs a plain plugin name and marketplace name: $name@$marketplace"
+      return 1
+    fi
+  done
+  _need_claude "plugin $name" || return 1
+  run_step claude plugin install "$name@$marketplace"
 }
 
 _install_custom() {
@@ -664,7 +804,7 @@ install_tool() {
   local kind="$1" name="$2"
   shift 2
   case "$kind" in
-    apt|go|pipx|gem|git|venv|url|custom) ;;
+    apt|go|pipx|gem|git|venv|url|uv|plugin|custom) ;;
     *)
       echo "unknown tool kind: $kind ($name)"
       HAKPAK_FAILED+=("$name")
@@ -692,5 +832,14 @@ install_summary() {
     return 0
   fi
   log "Failed to install: ${HAKPAK_FAILED[*]}"
+  if is_sbx; then
+    # The name goes into a command to copy: print it only when it is plain.
+    local box="SANDBOX"
+    [[ "$SANDBOX_NAME" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] && box="$SANDBOX_NAME"
+    echo "This is a sandbox: a failed download is often its network policy (an HTTP 403)."
+    echo "On the host, see what was blocked and allow the host you need, then run this section again:"
+    echo "  sbx policy log $box"
+    echo "  sbx policy allow network --sandbox $box HOST"
+  fi
   return 1
 }

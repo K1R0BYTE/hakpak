@@ -1,0 +1,13 @@
+# hakpak dev section: delta as the git pager. Included from your
+# ~/.gitconfig by one include.path line; delete that line to undo it.
+[core]
+	pager = delta
+[interactive]
+	diffFilter = delta --color-only
+[delta]
+	navigate = true
+	line-numbers = true
+[merge]
+	conflictstyle = diff3
+[diff]
+	colorMoved = default

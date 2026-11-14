@@ -2,8 +2,10 @@
 #
 #   section  kind  name  [source...]  # note shown in the README
 #
-# Sections: top system environment basic surfing web pentest cloud cicd mitm wordlists rdp
-# Kinds (see install/lib.sh): apt go pipx gem git venv url custom
+# Sections: top dev system environment basic surfing web pentest cloud cicd mitm wordlists rdp
+# Kinds (see install/lib.sh): apt go pipx gem git venv url uv plugin custom
+#   uv: `uv tool install`; the source is the package, when its name differs
+#   plugin: a Claude Code plugin; the source is its marketplace
 #   custom: the source is a function in install/custom.sh
 # In a source, $HOME and $HAKPAK_OPT are replaced; nothing else expands.
 #
@@ -24,8 +26,44 @@ top  apt     tmux                                 # with the hakpak config
 top  git     tpm  https://github.com/tmux-plugins/tpm  $HOME/.tmux/plugins/tpm
 top  custom  claude-code  _install_claude_code    # Claude Code CLI from Anthropic's apt repo (stable), with the skills from .claude/skills
 
+# --- Dev ---
+# A developer environment: search and shell tools, the Python, Node, Go and
+# Rust toolchains, and Claude Code with plugin marketplaces and plugins.
+# Nothing here builds or runs containers. Go and Claude Code are the rows
+# of environment and top again, so dev works on its own.
+dev  apt     build-essential
+dev  apt     ripgrep                              # rg, a faster grep
+dev  apt     jq
+dev  apt     git-delta                            # the git pager, with the hakpak git config
+dev  apt     gh                                   # GitHub CLI
+dev  apt     shellcheck
+dev  apt     shfmt
+dev  custom  fd  _install_fd                      # fd-find from apt, linked as fd
+dev  custom  uv  _install_uv_release              # release binary, checksum checked
+dev  custom  python  _install_uv_python           # Python 3.13 from uv
+dev  uv      ast-grep  ast-grep-cli               # code search by syntax tree
+dev  uv      ruff                                 # Python linter and formatter
+dev  uv      ty                                   # Python type checker
+dev  uv      zizmor                               # GitHub Actions security audit
+dev  uv      prek                                 # git hooks, a faster pre-commit
+dev  custom  fnm  _install_fnm                    # Node version manager, pinned release, checksum checked
+dev  custom  node  _install_node                  # Node 22 from fnm, with pnpm through corepack
+dev  custom  go  _install_go_toolchain  # latest Go from go.dev, in /usr/local/go
+dev  go      actionlint  github.com/rhysd/actionlint/cmd/actionlint@latest  # GitHub Actions linter
+dev  custom  rust  _install_rust                  # stable Rust with clippy and rustfmt, from rustup-init, checksum checked
+dev  custom  claude-code  _install_claude_code    # Claude Code CLI from Anthropic's apt repo (stable), with the skills from .claude/skills
+dev  custom  claude-marketplaces  _install_claude_marketplaces  # trailofbits/skills, trailofbits/skills-curated, anthropics/skills and hakpak's own
+dev  plugin  modern-python           trailofbits  # uv, ruff, ty and pytest for Python projects
+dev  plugin  rust-review             trailofbits  # Rust security review
+dev  plugin  gh-cli                  trailofbits  # sends GitHub fetches through gh
+dev  plugin  git-cleanup             trailofbits  # sorts and cleans local branches and worktrees
+dev  plugin  property-based-testing  trailofbits
+dev  plugin  static-analysis         trailofbits  # CodeQL, Semgrep and SARIF
+dev  plugin  differential-review     trailofbits  # security review of a diff
+dev  plugin  security-audit          hakpak       # Cloudflare's security-audit-skill
+dev  git     claude-code-config  https://github.com/trailofbits/claude-code-config  $HAKPAK_OPT/claude-code-config  # Trail of Bits' Claude Code config; run claude there and /trailofbits:config
+
 # --- System ---
-system  apt  build-essential
 system  apt  net-tools
 system  apt  bind9-dnsutils
 system  apt  nfs-common

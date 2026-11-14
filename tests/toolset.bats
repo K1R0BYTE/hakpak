@@ -53,7 +53,7 @@ not_recorded() {
   [ -n "$(toolset_rows)" ]
   while IFS=$'\t' read -r _ kind _; do
     case "$kind" in
-      apt|go|pipx|gem|git|venv|url|custom) ;;
+      apt|go|pipx|gem|git|venv|url|uv|plugin|custom) ;;
       *) echo "unknown kind: $kind"; return 1 ;;
     esac
   done < <(toolset_rows)

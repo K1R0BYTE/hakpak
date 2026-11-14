@@ -33,7 +33,7 @@ menu_keys() {
   run bash -c 'printf "$1" | _HAKPAK_MENU_TTY=1 bash "$2" "${@:3}"' _ "$keys" "$REPO/install/setup.sh" "$@"
 }
 
-ALL="top system environment basic surfing web pentest cloud cicd mitm wordlists wsl rdp"
+ALL="top dev system environment basic surfing web pentest cloud cicd mitm wordlists wsl rdp"
 
 # Section ids setup.sh announced, in order, one per line.
 sections_run() {
@@ -131,21 +131,21 @@ no_real_calls() {
 }
 
 @test "menu: space ticks, j/k move, Enter installs the ticked sections" {
-  # tick top, move down 5 to web, tick, up 2 to basic, tick, Enter
-  menu_keys ' jjjjj kk \n' --dry-run
+  # tick top, move down 6 to web, tick, up 2 to basic, tick, Enter
+  menu_keys ' jjjjjj kk \n' --dry-run
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [ "$(sections_run | paste -sd' ')" = "top basic web" ]
   [[ "$output" == *"[x] web"* ]]
 }
 
 @test "menu: arrow keys move the cursor" {
-  menu_keys '\033[B\033[B \033[A \n' --dry-run
+  menu_keys '\033[B\033[B\033[B \033[A \n' --dry-run
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [ "$(sections_run | paste -sd' ')" = "system environment" ]
 }
 
 @test "menu: space again unticks" {
-  menu_keys '  j \n' --dry-run
+  menu_keys '  jj \n' --dry-run
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [ "$(sections_run | paste -sd' ')" = "system" ]
 }
@@ -154,7 +154,7 @@ no_real_calls() {
   menu_keys 'a\n' --dry-run
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [ "$(sections_run | paste -sd' ')" = "$ALL" ]
-  menu_keys 'aaj \n' --dry-run
+  menu_keys 'aajj \n' --dry-run
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [ "$(sections_run | paste -sd' ')" = "system" ]
 }
@@ -169,7 +169,7 @@ no_real_calls() {
 }
 
 @test "menu: Enter with nothing ticked asks again instead of installing" {
-  menu_keys '\nj \n' --dry-run
+  menu_keys '\njj \n' --dry-run
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [[ "$output" == *"Tick at least one section"* ]]
   [ "$(sections_run | paste -sd' ')" = "system" ]
@@ -192,7 +192,7 @@ no_real_calls() {
 }
 
 @test "menu: SS3 arrow keys (application cursor mode) move the cursor too" {
-  menu_keys '\033OB\033OB \033OA \n' --dry-run
+  menu_keys '\033OB\033OB\033OB \033OA \n' --dry-run
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [ "$(sections_run | paste -sd' ')" = "system environment" ]
 }
@@ -265,6 +265,17 @@ no_real_calls() {
   second="$(sed -n '1,/^Arrows or j\/k move/!p' <<< "$output" | sed -n '/^Arrows or j\/k move/,$p')"
   [[ "$second" == *"build-essential"* ]] || { echo "$second"; return 1; }
   [[ "$second" != *"claude-code"* ]] || { echo "$second"; return 1; }
+}
+
+@test "menu: on a short terminal a tool list longer than the room left is cut" {
+  LINES=20 menu_keys 'jq' --dry-run
+  second="$(sed -n '1,/^Arrows or j\/k move/!p' <<< "$output" | sed -n '/^Arrows or j\/k move/,$p')"
+  [ "$(grep -c '^      ' <<< "$second")" -eq 2 ] || { echo "$second"; return 1; }
+  grep -qx '      \.\.\.' <<< "$second"
+  # with room for all of it, nothing is cut
+  LINES=30 menu_keys 'jq' --dry-run
+  [[ "$output" != *"      ..."* ]] || { echo "$output"; return 1; }
+  [[ "$output" == *"claude-code-config"* ]]
 }
 
 @test "menu: on a short terminal, a frame still fits and redraws over the last one" {
