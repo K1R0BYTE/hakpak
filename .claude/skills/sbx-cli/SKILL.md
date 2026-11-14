@@ -467,7 +467,7 @@ Escalate in this order, and say what each step destroys before running it:
 | Allow rule has no effect | Organization policy is enforced and local allows are inactive, or a local deny matches (deny wins). The 403 body inside the sandbox says which; see Inside the sandbox |
 | `git push` fails with `could not read Username for 'https://github.com'` | No GitHub secret. On the host: `gh auth token \| sbx secret set github --sandbox NAME` |
 | Requests fail with connection errors, or are very slow, and policy log shows them allowed | Set `DOCKER_SANDBOXES_IP_STACK=ipv4only` (or `ipv6only`) for the daemon and restart it |
-| Published port connects, then resets or refuses | The service listens on `127.0.0.1` only, or is IPv4-only behind a `/tcp` publish. Bind `0.0.0.0` |
+| Published port connects, then resets or refuses | The service listens on `127.0.0.1` only, or is IPv4-only behind a `/tcp` publish. Bind `0.0.0.0` in the first case; in the second republish without `/tcp` or make the service listen on `::` |
 | API key errors although the secret is set | PROXY column shows `transparent`: the client bypassed the forward proxy. Do not set a real key inside the sandbox to work around it |
 | `self-signed certificate in certificate chain` | Corporate TLS inspection: `sbx cp` the root CA in, then `sbx exec -u root NAME update-ca-certificates`. Do not point `SSL_CERT_FILE` at only your CA; that breaks the credential proxy |
 | Certificate errors in `docker build` inside the sandbox | Build containers do not inherit the sandbox trust store. Write `$PROXY_CA_CERT_B64` (base64-decoded) to a `.crt`, `COPY` it, run `update-ca-certificates`, and pass `--build-arg HTTP_PROXY --build-arg HTTPS_PROXY --build-arg NO_PROXY` |
