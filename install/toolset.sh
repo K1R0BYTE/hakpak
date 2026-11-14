@@ -17,10 +17,10 @@ HAKPAK_TOOLSET="${HAKPAK_TOOLSET:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/
 
 # Sections in install and README order, as <id>:<README title>.
 HAKPAK_SECTIONS=(
+  "top:Top"
   "system:System"
   "environment:Environment"
   "basic:Basic"
-  "top:Top"
   "surfing:Surfing"
   "web:Web Tools"
   "pentest:Pentest Tools"

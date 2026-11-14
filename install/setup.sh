@@ -14,10 +14,10 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 # The script that installs each section.
 section_script() {
   case "$1" in
+    top) echo top.sh ;;
     system) echo system.sh ;;
     environment) echo enviroment.sh ;;
     basic) echo basic.sh ;;
-    top) echo top.sh ;;
     surfing) echo surfing.sh ;;
     web) echo web-soft.sh ;;
     pentest) echo pentest-soft.sh ;;
@@ -234,3 +234,6 @@ if [ "${#failed[@]}" -gt 0 ]; then
   exit 1
 fi
 log_ok "Done: ${selected[*]}"
+
+# With zsh just installed, hand the terminal over to it (see lib.sh).
+start_zsh_now "${selected[@]}"

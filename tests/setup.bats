@@ -33,7 +33,7 @@ menu_keys() {
   run bash -c 'printf "$1" | _HAKPAK_MENU_TTY=1 bash "$2" "${@:3}"' _ "$keys" "$REPO/install/setup.sh" "$@"
 }
 
-ALL="system environment basic top surfing web pentest cloud cicd mitm wordlists wsl rdp"
+ALL="top system environment basic surfing web pentest cloud cicd mitm wordlists wsl rdp"
 
 # Section ids setup.sh announced, in order, one per line.
 sections_run() {
@@ -131,23 +131,23 @@ no_real_calls() {
 }
 
 @test "menu: space ticks, j/k move, Enter installs the ticked sections" {
-  # tick system, move down 5 to web, tick, up 3 to basic, tick, Enter
-  menu_keys ' jjjjj kkk \n' --dry-run
+  # tick top, move down 5 to web, tick, up 2 to basic, tick, Enter
+  menu_keys ' jjjjj kk \n' --dry-run
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-  [ "$(sections_run | paste -sd' ')" = "system basic web" ]
+  [ "$(sections_run | paste -sd' ')" = "top basic web" ]
   [[ "$output" == *"[x] web"* ]]
 }
 
 @test "menu: arrow keys move the cursor" {
   menu_keys '\033[B\033[B \033[A \n' --dry-run
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-  [ "$(sections_run | paste -sd' ')" = "environment basic" ]
+  [ "$(sections_run | paste -sd' ')" = "system environment" ]
 }
 
 @test "menu: space again unticks" {
   menu_keys '  j \n' --dry-run
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-  [ "$(sections_run | paste -sd' ')" = "environment" ]
+  [ "$(sections_run | paste -sd' ')" = "system" ]
 }
 
 @test "menu: a ticks every section, a again unticks them" {
@@ -156,13 +156,13 @@ no_real_calls() {
   [ "$(sections_run | paste -sd' ')" = "$ALL" ]
   menu_keys 'aaj \n' --dry-run
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-  [ "$(sections_run | paste -sd' ')" = "environment" ]
+  [ "$(sections_run | paste -sd' ')" = "system" ]
 }
 
 @test "menu: the cursor stops at the first and last section" {
   menu_keys 'kkk \n' --dry-run
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-  [ "$(sections_run | paste -sd' ')" = "system" ]
+  [ "$(sections_run | paste -sd' ')" = "top" ]
   menu_keys 'jjjjjjjjjjjjjjjjjjjj \n' --dry-run
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [ "$(sections_run | paste -sd' ')" = "rdp" ]
@@ -172,7 +172,7 @@ no_real_calls() {
   menu_keys '\nj \n' --dry-run
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [[ "$output" == *"Tick at least one section"* ]]
-  [ "$(sections_run | paste -sd' ')" = "environment" ]
+  [ "$(sections_run | paste -sd' ')" = "system" ]
 }
 
 @test "menu: q quits without installing anything" {
@@ -194,7 +194,7 @@ no_real_calls() {
 @test "menu: SS3 arrow keys (application cursor mode) move the cursor too" {
   menu_keys '\033OB\033OB \033OA \n' --dry-run
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-  [ "$(sections_run | paste -sd' ')" = "environment basic" ]
+  [ "$(sections_run | paste -sd' ')" = "system environment" ]
 }
 
 @test "menu: no line is wider than 79 columns, so redraws don't wrap" {
@@ -207,7 +207,7 @@ no_real_calls() {
 
 @test "menu: a section line shows the section id once, without its title" {
   menu_keys 'q' --dry-run
-  [[ "$output" == *"> [ ] system"$'\n'* ]] || { echo "$output"; return 1; }
+  [[ "$output" == *"> [ ] top"$'\n'* ]] || { echo "$output"; return 1; }
   [[ "$output" == *"  [ ] web"$'\n'* ]] || { echo "$output"; return 1; }
   [[ "$output" != *"Web Tools"* ]] || { echo "$output"; return 1; }
 }
@@ -260,11 +260,11 @@ no_real_calls() {
 @test "menu: on a short terminal only the section under the cursor lists its tools" {
   LINES=20 menu_keys 'jq' --dry-run
   first="$(sed -n '/^Arrows or j\/k move/,/^Arrows or j\/k move/p' <<< "$output")"
-  [[ "$first" == *"build-essential"* ]] || { echo "$first"; return 1; }
-  [[ "$first" != *"python3-pip"* ]] || { echo "$first"; return 1; }
+  [[ "$first" == *"claude-code"* ]] || { echo "$first"; return 1; }
+  [[ "$first" != *"build-essential"* ]] || { echo "$first"; return 1; }
   second="$(sed -n '1,/^Arrows or j\/k move/!p' <<< "$output" | sed -n '/^Arrows or j\/k move/,$p')"
-  [[ "$second" == *"python3-pip"* ]] || { echo "$second"; return 1; }
-  [[ "$second" != *"build-essential"* ]] || { echo "$second"; return 1; }
+  [[ "$second" == *"build-essential"* ]] || { echo "$second"; return 1; }
+  [[ "$second" != *"claude-code"* ]] || { echo "$second"; return 1; }
 }
 
 @test "menu: on a short terminal, a frame still fits and redraws over the last one" {

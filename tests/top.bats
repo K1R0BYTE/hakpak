@@ -91,16 +91,16 @@ CLAUDE_FPR=31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE
   toolset_check
 }
 
-@test "top comes right after basic" {
+@test "top is the first section" {
   lib
   ids="$(for s in "${HAKPAK_SECTIONS[@]}"; do echo "${s%%:*}"; done | paste -sd' ')"
-  [[ " $ids " == *" basic top "* ]] || { echo "$ids"; return 1; }
+  [[ "$ids " == "top system "* ]] || { echo "$ids"; return 1; }
   run bash "$REPO/install/setup.sh" --help
   [[ "$output" == *"top "*"Top"* ]] || { echo "$output"; return 1; }
 }
 
 @test "the README names the top section and lists its tools" {
-  grep -q '^Sections: .*`basic`, `top`, `surfing`' "$REPO/README.md"
+  grep -q '^Sections: `top`, `system`,' "$REPO/README.md"
   grep -qx '## Top' "$REPO/README.md"
   grep -q '^\* claude-code: ' "$REPO/README.md"
 }
@@ -148,7 +148,7 @@ CLAUDE_FPR=31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE
 @test "basic and top together install cleanly" {
   run bash "$REPO/install/setup.sh" --dry-run basic top
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-  [[ "$output" == *"== Section: basic"*"== Section: top"* ]]
+  [[ "$output" == *"== Section: top"*"== Section: basic"* ]]
 }
 
 # --- Claude Code ---

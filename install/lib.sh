@@ -96,13 +96,13 @@ run_step() {
 
 # Run a step that isn't a tool install (config, service) and count a
 # failure in the summary: step <label> <command...>
-# link_config and merge_history are called directly: they send their own
+# link_config, merge_history and start_zsh_from_bash are called directly: they send their own
 # commands through run_step, so a dry run records what they would do.
 step() {
   local label="$1" rc
   shift
   case "$1" in
-    link_config|merge_history) "$@" ;;
+    link_config|merge_history|start_zsh_from_bash) "$@" ;;
     *) run_step "$@" ;;
   esac
   rc=$?
@@ -255,7 +255,106 @@ link_shell_configs() {
   if tmux info >/dev/null 2>&1; then
     step 'tmux reload' tmux source-file "${HOME}/.tmux.conf"
   fi
+  step 'zsh from bash' start_zsh_from_bash
   return 0
+}
+
+# Make an interactive bash hand over to zsh, by sourcing
+# configs/bash/start-zsh.bash from ~/.bashrc. The login shell is changed too
+# (see _use_zsh_as_login_shell), but a container or sandbox shell starts bash
+# directly and never reads it. One marked line is kept in ~/.bashrc: added
+# once, replaced if the clone has moved, and a .bashrc that is your own link
+# stays a link. HAKPAK_NO_ZSH=1 in your environment switches the hook off.
+_ZSH_HOOK_MARK='# hakpak: start zsh'
+start_zsh_from_bash() {
+  local rc="${HOME}/.bashrc" hook="$HAKPAK_ROOT/configs/bash/start-zsh.bash" line
+  [ -f "$hook" ] || { echo "no $hook"; return 1; }
+  printf -v line '[ -r %q ] && . %q  %s' "$hook" "$hook" "$_ZSH_HOOK_MARK"
+  if [ -f "$rc" ] && grep -qxF -- "$line" "$rc" &&
+      [ "$(grep -cF -- "$_ZSH_HOOK_MARK" "$rc")" -eq 1 ]; then
+    log_ok "$rc already starts zsh"
+    return 0
+  fi
+  run_step _set_marked_line "$rc" "$_ZSH_HOOK_MARK" "$line"
+}
+
+# Keep exactly one line with <mark> in <file>: drop any there, add <line> at
+# the end. The new text is written next to the file and moved over it, so a
+# full disk or an interrupt leaves the old file whole; a link stays a link
+# (the file it points to is the one replaced) and the mode is kept.
+_set_marked_line() {
+  local file="$1" mark="$2" line="$3" real tmp rc
+  real="$file"
+  [ -L "$file" ] && real="$(readlink -f "$file")"
+  [ -n "$real" ] || { echo "can't resolve $file"; return 1; }
+  tmp="$(mktemp "$real.hakpak.XXXXXXXX")" || return 1
+  if [ -e "$real" ]; then
+    chmod --reference="$real" "$tmp" || { rm -f "$tmp"; return 1; }
+    grep -vF -- "$mark" "$real" > "$tmp"
+    [ "$?" -le 1 ] || { rm -f "$tmp"; return 1; }
+  else
+    chmod 644 "$tmp"
+  fi
+  printf '%s\n' "$line" >> "$tmp" && mv -f "$tmp" "$real"
+  rc=$?
+  rm -f "$tmp"
+  return "$rc"
+}
+
+# The process group of a process, from /proc/<pid>/stat (the fifth field;
+# the second, the name, may hold spaces and brackets).
+_process_group() {
+  local stat
+  local -a f
+  stat="$(cat "/proc/$1/stat" 2>/dev/null)" || return 1
+  read -r -a f <<< "${stat##*) }"
+  [ -n "${f[2]:-}" ] || return 1
+  echo "${f[2]}"
+}
+
+# The name of the interactive shell setup.sh was typed into (bash, sh, zsh),
+# or nothing when it was started by anything else: a script, `bash -c`, a
+# container entrypoint, ssh with a command. A shell with a prompt runs each
+# command as a job in a process group of its own; a script's commands stay
+# in the script's group.
+_prompt_shell() {
+  local name mine theirs
+  if [ -n "${_HAKPAK_PROMPT_SHELL+x}" ]; then
+    echo "$_HAKPAK_PROMPT_SHELL"
+    return 0
+  fi
+  name="$(cat "/proc/$PPID/comm" 2>/dev/null)" || return 0
+  mine="$(_process_group "$$")" || return 0
+  theirs="$(_process_group "$PPID")" || return 0
+  [ "$mine" != "$theirs" ] || return 0
+  echo "${name#-}"
+}
+
+# Called last by setup.sh with the sections it installed: when zsh was among
+# them (basic, top) and setup was typed at the prompt of another shell,
+# replace setup with zsh, so the new shell is there without logging out.
+# `exit` goes back to the shell setup was started from. Not in a dry run,
+# not from a script, not when you already are in zsh, and not with
+# HAKPAK_NO_ZSH=1. zsh gets your environment without the installer's own
+# variables; the PATH and Go settings it needs come from its .zshrc.
+start_zsh_now() {
+  local zsh
+  _toolset_known top "$@" || _toolset_known basic "$@" || return 0
+  [ "${HAKPAK_DRY_RUN:-0}" != 1 ] || return 0
+  [ -z "${HAKPAK_NO_ZSH:-}" ] || return 0
+  [ -z "${HAKPAK_ZSH_STARTED:-}" ] || return 0
+  if [ "${_HAKPAK_TTY:-0}" != 1 ]; then
+    { [ -t 0 ] && [ -t 1 ]; } || return 0
+  fi
+  case "$(_prompt_shell)" in
+    bash | sh | dash | ash | ksh | mksh | fish) ;;
+    *) return 0 ;;
+  esac
+  zsh="$(command -v zsh)" || return 0
+  "$zsh" -c exit >/dev/null 2>&1 || return 0
+  log_ok "Starting zsh. Type exit to go back to your old shell; HAKPAK_NO_ZSH=1 keeps setup and bash from starting it."
+  unset HAKPAK_ROOT HAKPAK_OPT HAKPAK_SYSROOT HAKPAK_TOOLSET
+  HAKPAK_ZSH_STARTED=1 SHELL="$zsh" exec "$zsh" -l
 }
 
 # Add the curated zsh history to yours: merge_history <configs/path> <target>

@@ -7,6 +7,10 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 require_normal_user
 
+# top is the first section, so it can't count on system's refresh.
+log 'Updating package lists'
+step 'package lists' sudo apt-get update
+
 install_section top
 
 link_shell_configs

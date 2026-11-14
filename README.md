@@ -34,11 +34,13 @@ bash setup.sh --dry-run all          # everything, without installing
 bash setup.sh --help                 # the section names
 ```
 
-Sections: `system`, `environment`, `basic`, `top`, `surfing`, `web`, `pentest`, `cloud`, `cicd`, `mitm`, `wordlists`, `wsl`, `rdp`. If one fails, the rest still run and `setup.sh` lists the failed sections at the end.
+Sections: `top`, `system`, `environment`, `basic`, `surfing`, `web`, `pentest`, `cloud`, `cicd`, `mitm`, `wordlists`, `wsl`, `rdp`. If one fails, the rest still run and `setup.sh` lists the failed sections at the end.
 
 Run `setup.sh` as your normal user, not with sudo. Your user needs sudo rights; the scripts ask for your password only for the steps that need root (apt packages, `/usr/local`, `/etc`). Everything else installs as you: Go tools into `/opt/go`, pipx tools into `~/.local/bin`, and git tools into `/opt/<tool>`, owned by you.
 
-After the install, log out and back in once: that picks up your new shell (zsh), the PATH for Go and pipx tools, and the wireshark group.
+When `setup.sh` has installed zsh (the `top` or `basic` section) and you ran it at a terminal, it ends by starting zsh, so you are in the new shell right away; `exit` goes back to the shell you started from. zsh also becomes your login shell, and one line added to `~/.bashrc` makes an interactive bash hand over to zsh, for places that start bash directly and never read the login shell (a container or sandbox shell). Scripts and `bash -c` are not touched, and a `bash` typed from zsh stays bash. `HAKPAK_NO_ZSH=1` switches both off.
+
+After the install, log out and back in once: that picks up the PATH for Go and pipx tools, and the wireshark group.
 
 You can clone it anywhere; the scripts find the repo from their own path.
 
@@ -59,6 +61,17 @@ bash setup.sh --dry-run web
 Every tool is one row in [`install/toolset.txt`](install/toolset.txt): its section, how it installs (its kind), its name and where it comes from. Each section script installs its rows, and the list below is generated from the same file. To add or drop a tool, edit that file and run `tools/gen-readme`. Tools that need more than one step (`custom`) name a function in `install/custom.sh`.
 
 <!-- toolset:start -->
+## Top
+
+* vim (apt)
+* fzf (apt): Ctrl+R history search
+* zsh (apt): with the hakpak config and history
+* oh-my-zsh: with zsh-syntax-highlighting and zsh-autosuggestions
+* starship: prompt for the hakpak themes, release binary, checksum checked
+* tmux (apt): with the hakpak config
+* tpm (git)
+* claude-code: Claude Code CLI from Anthropic's apt repo (stable), with the skills from .claude/skills
+
 ## System
 
 * build-essential (apt)
@@ -93,17 +106,6 @@ Every tool is one row in [`install/toolset.txt`](install/toolset.txt): its secti
 * starship: prompt for the hakpak themes, release binary, checksum checked
 * tmux (apt): with the hakpak config
 * tpm (git)
-
-## Top
-
-* vim (apt)
-* fzf (apt): Ctrl+R history search
-* zsh (apt): with the hakpak config and history
-* oh-my-zsh: with zsh-syntax-highlighting and zsh-autosuggestions
-* starship: prompt for the hakpak themes, release binary, checksum checked
-* tmux (apt): with the hakpak config
-* tpm (git)
-* claude-code: Claude Code CLI from Anthropic's apt repo (stable), with the skills from .claude/skills
 
 ## Surfing
 
