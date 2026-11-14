@@ -12,7 +12,17 @@ ZSH_THEME="agnoster"
 # With starship installed it draws the prompt instead (see the end of this
 # file), in the hakpak theme picked with `hakpak-theme`.
 command -v starship >/dev/null 2>&1 && ZSH_THEME=""
-eval `dircolors ~/.dircolors`
+# -b: say which syntax to print, so dircolors doesn't need $SHELL, which a
+# container or sandbox shell may not have.
+[ -r ~/.dircolors ] && eval "$(dircolors -b ~/.dircolors)"
+
+# A UTF-8 character set when the environment names none (a container or
+# sandbox shell often has no locale at all). tmux reads these variables to
+# decide whether your terminal speaks UTF-8, and without one it draws every
+# prompt glyph as "_". An LC_ALL you set yourself is left alone.
+if [[ -z "${LC_ALL:-}" && "${(L)LC_CTYPE:-${LANG:-}}" != *utf(-|)8* ]]; then
+    export LC_CTYPE=C.UTF-8
+fi
 
 export CDPATH=${HOME}/pentest:/opt/
 
