@@ -204,6 +204,8 @@ CLAUDE_FPR=31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE
   lib_with_claude 0
   install_tool custom claude-code _install_claude_code
   line() { grep -nF -- "$1" "$HAKPAK_DRY_RUN_LOG" | head -1 | cut -d: -f1; }
+  recorded "_key_has_fingerprint $REPO/install/keys/claude-code.asc $CLAUDE_FPR"
+  [ "$(line _key_has_fingerprint)" -lt "$(line verify_gpg_signature)" ]
   [ "$(line verify_gpg_signature)" -lt "$(line '/claude https://')" ] || { cat "$HAKPAK_DRY_RUN_LOG"; return 1; }
   [ "$(line '/claude https://')" -lt "$(line verify_claude_binary)" ]
   [ "$(line verify_claude_binary)" -lt "$(line _claude_self_install)" ]
@@ -310,7 +312,7 @@ CLAUDE_FPR=31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE
   run install_tool custom claude-code _install_claude_code
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   recorded "_claude_self_install"
-  [[ "$output" == *"Windows' claude"*"~/.local/bin before it"* ]] || { echo "$output"; return 1; }
+  [[ "$output" == *"Windows also has a claude"*"put ~/.local/bin before"* ]] || { echo "$output"; return 1; }
 }
 
 @test "not on WSL, a claude under /mnt is an install of your own and is kept" {
@@ -364,6 +366,14 @@ CLAUDE_FPR=31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
 }
 
+@test "verify_claude_binary takes a checksum in capitals too" {
+  lib
+  printf 'binary' > "$BATS_TEST_TMPDIR/claude"
+  claude_manifest 2.1.340 "$(sha256sum "$BATS_TEST_TMPDIR/claude" | cut -d' ' -f1 | tr a-f A-F)"
+  run verify_claude_binary "$BATS_TEST_TMPDIR/claude" "$BATS_TEST_TMPDIR/manifest.json" linux-x64 2.1.340
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+}
+
 @test "verify_claude_binary fails another binary, another platform's, and another version's manifest" {
   lib
   printf 'binary' > "$BATS_TEST_TMPDIR/claude"
@@ -395,10 +405,49 @@ CLAUDE_FPR=31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE
 echo "$url" >> "'"$BATS_TEST_TMPDIR"'/urls"; cp "'"$BATS_TEST_TMPDIR"'/serve/${url##*/}" "$out"'
   lib_with_claude 0
   HAKPAK_ROOT="$BATS_TEST_TMPDIR/root"
-  run _install_claude_native
-  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  CLAUDE_KEY_FPR="$FPR"
+  _install_claude_native > "$BATS_TEST_TMPDIR/out" 2>&1 || { cat "$BATS_TEST_TMPDIR/out"; return 1; }
   [ "$(cat "$BATS_TEST_TMPDIR/ran")" = "install latest" ]
   grep -qx "$CLAUDE_RELEASES/2.1.340/$platform/claude" "$BATS_TEST_TMPDIR/urls"
+  # The plugin steps later in the run find the new claude first.
+  [[ "$PATH" == "$HOME/.local/bin:"* ]] || { echo "$PATH"; return 1; }
+}
+
+@test "the native install refuses a repo key that isn't Anthropic's" {
+  unset HAKPAK_DRY_RUN
+  make_test_key
+  mkdir -p "$BATS_TEST_TMPDIR/root/install/keys"
+  cp "$KEY" "$BATS_TEST_TMPDIR/root/install/keys/claude-code.asc"
+  stub curl 'while [ $# -gt 1 ]; do [ "$1" = -o ] && printf "2.1.340\n" > "$2"; shift; done'
+  lib_with_claude 0
+  HAKPAK_ROOT="$BATS_TEST_TMPDIR/root"
+  run _install_claude_native
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"fingerprint"* ]] || { echo "$output"; return 1; }
+}
+
+@test "the apt package is kept when the native launcher isn't there after the install" {
+  unset HAKPAK_DRY_RUN
+  apt_claude
+  stub sudo 'echo "sudo $*" >> "'"$BATS_TEST_TMPDIR"'/sudo.log"'
+  lib_with_claude 1
+  _claude_command() { echo /usr/bin/claude; }
+  _install_claude_native() { return 0; }
+  run install_tool custom claude-code _install_claude_code
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"apt package is kept"* ]] || { echo "$output"; return 1; }
+  ! grep -q 'apt-get remove' "$BATS_TEST_TMPDIR/sudo.log" 2>/dev/null
+}
+
+@test "the skills are linked even when removing the apt package fails" {
+  unset HAKPAK_DRY_RUN
+  native_claude
+  apt_claude
+  stub sudo 'exit 100'
+  lib
+  run install_tool custom claude-code _install_claude_code
+  [ "$status" -ne 0 ]
+  [ -L "$SKILLS/sbx-cli" ] || { echo "$output"; return 1; }
 }
 
 @test "the native install refuses a manifest that Anthropic's key didn't sign" {

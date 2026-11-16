@@ -131,28 +131,38 @@ _install_starship() {
 # is Windows' own (through PATH interop) and doesn't count.
 # The skills are linked on every run, so a new skill in the repo shows up.
 _install_claude_code() {
-  local path
+  local path rc=0 apt=0
+  _claude_apt_installed && apt=1
   if _claude_is_native; then
     log_ok "claude-code already installed (native, updates itself)"
-  elif _claude_apt_installed; then
+  elif [ "$apt" = 1 ]; then
     log "claude-code is the apt package, which doesn't update itself; moving it to the native install"
     _install_claude_native || return 1
   elif path="$(_claude_on_path)"; then
     log_ok "claude-code already installed at ${path:-your PATH}; left as it is (claude doctor shows how it updates)"
   else
-    _install_claude_native || return 1
     path="$(_claude_command)"
+    _install_claude_native || return 1
     if [[ "$path" == /mnt/* ]] && is_wsl; then
-      echo "claude-code: Windows' claude ($path) comes first on your PATH. Put ~/.local/bin before it, or remove the Windows one, so claude runs the native install."
+      echo "claude-code: Windows also has a claude on your PATH ($path). If claude in a new shell is still that one, put ~/.local/bin before the Windows entries in PATH."
     fi
   fi
-  if _claude_apt_installed; then
-    _remove_claude_apt || return 1
+  if [ "$apt" = 1 ]; then
+    # Only once the native launcher is really there.
+    if [ "${HAKPAK_DRY_RUN:-0}" != 1 ] && ! _claude_is_native; then
+      echo "claude-code: the native install didn't put its launcher at ~/.local/bin/claude; the apt package is kept"
+      rc=1
+    else
+      _remove_claude_apt || rc=1
+    fi
   fi
-  _link_claude_skills
+  _link_claude_skills || rc=1
+  return "$rc"
 }
 
 CLAUDE_RELEASES=https://downloads.claude.ai/claude-code-releases
+# Anthropic's Claude Code release signing key, as the setup docs give it.
+CLAUDE_KEY_FPR=31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE
 
 _claude_command() {
   command -v claude
@@ -226,11 +236,11 @@ verify_claude_binary() {
     echo "the Claude Code manifest is not for version $version"
     return 1
   fi
-  if ! [[ "$json" =~ \"$platform\"[[:space:]]*:[[:space:]]*\{[^\}]*\"checksum\"[[:space:]]*:[[:space:]]*\"([0-9a-f]{64})\" ]]; then
+  if ! [[ "$json" =~ \"$platform\"[[:space:]]*:[[:space:]]*\{[^\}]*\"checksum\"[[:space:]]*:[[:space:]]*\"([0-9a-fA-F]{64})\" ]]; then
     echo "no checksum for $platform in the Claude Code manifest"
     return 1
   fi
-  expected="${BASH_REMATCH[1]}"
+  expected="${BASH_REMATCH[1],,}"
   actual="$(sha256sum "$bin" | awk '{ print $1 }')" || return 1
   if [ "$expected" != "$actual" ]; then
     echo "checksum mismatch for the Claude Code $platform binary"
@@ -248,9 +258,10 @@ _claude_self_install() {
 # The native installer script's own steps, with one more check
 # and no script piped into a shell: the release manifest's signature is
 # checked against Anthropic's Claude Code release key, kept in
-# install/keys/claude-code.asc (fingerprint
-# 31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE, as the setup docs give it),
-# then the binary against the manifest's sha256. Runs as you, no sudo.
+# install/keys/claude-code.asc (its fingerprint, CLAUDE_KEY_FPR, checked
+# first), then the binary against the manifest's sha256. Runs as you, no
+# sudo. The version comes from the unsigned `latest` file over HTTPS, the
+# same trust the official installer gives it.
 _install_claude_native() {
   local platform version tmp rc
   need_command curl || return 1
@@ -263,6 +274,7 @@ _install_claude_native() {
     version="$(_claude_release_version "$tmp/version")" &&
     run_step curl -fsSL -o "$tmp/manifest.json" "$CLAUDE_RELEASES/$version/manifest.json" &&
     run_step curl -fsSL -o "$tmp/manifest.json.sig" "$CLAUDE_RELEASES/$version/manifest.json.sig" &&
+    run_step _key_has_fingerprint "$HAKPAK_ROOT/install/keys/claude-code.asc" "$CLAUDE_KEY_FPR" &&
     run_step verify_gpg_signature "$HAKPAK_ROOT/install/keys/claude-code.asc" "$tmp/manifest.json.sig" "$tmp/manifest.json" &&
     run_step curl -fsSL -o "$tmp/claude" "$CLAUDE_RELEASES/$version/$platform/claude" &&
     run_step verify_claude_binary "$tmp/claude" "$tmp/manifest.json" "$platform" "$version" &&
@@ -270,7 +282,14 @@ _install_claude_native() {
     run_step _claude_self_install "$tmp/claude"
   rc=$?
   run_step rm -rf "$tmp"
-  return "$rc"
+  [ "$rc" -eq 0 ] || return "$rc"
+  # The rest of this run (the plugin steps) uses the new claude, ahead of
+  # one from apt or, on WSL, from Windows.
+  case ":$PATH:" in
+    "$HOME/.local/bin:"*) ;;
+    *) PATH="$HOME/.local/bin:$PATH" ;;
+  esac
+  echo "claude-code: open a new shell if claude isn't found; the launcher is ~/.local/bin/claude"
 }
 
 # Remove the apt package once the native install is there, and the repo
