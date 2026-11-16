@@ -453,3 +453,172 @@ STUB
   install_tool custom oh-my-zsh _install_oh_my_zsh
   not_recorded "chsh"
 }
+
+# --- picking single tools: HAKPAK_TOOLS and the install plan ---
+
+@test "install_section installs only the tools named in HAKPAK_TOOLS" {
+  manifest <<'M'
+s apt aa
+s apt bb
+s git cc https://example.com/cc $HAKPAK_OPT/cc
+s git dd https://example.com/dd $HAKPAK_OPT/dd
+M
+  lib
+  HAKPAK_SECTIONS=("s:S" "t:T")
+  HAKPAK_TOOLS="bb dd" install_section s
+  recorded "bb"
+  recorded "$HAKPAK_OPT/dd"
+  not_recorded " aa"
+  not_recorded "$HAKPAK_OPT/cc"
+}
+
+@test "install_section with none of its tools in HAKPAK_TOOLS installs nothing and doesn't fail" {
+  manifest <<'M'
+s apt aa
+t apt bb
+M
+  lib
+  HAKPAK_SECTIONS=("s:S" "t:T")
+  HAKPAK_TOOLS="bb" run install_section s
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [ ! -s "$HAKPAK_DRY_RUN_LOG" ]
+  [[ "$output" == *"nothing ticked"* ]] || { echo "$output"; return 1; }
+}
+
+@test "without HAKPAK_TOOLS a section installs every tool, as before" {
+  manifest <<'M'
+s apt aa
+s apt bb
+M
+  lib
+  HAKPAK_SECTIONS=("s:S" "t:T")
+  unset HAKPAK_TOOLS
+  install_section s
+  recorded "aa bb"
+}
+
+@test "tool_wanted: every tool without HAKPAK_TOOLS, only the named ones with it" {
+  lib
+  unset HAKPAK_TOOLS
+  tool_wanted zsh
+  HAKPAK_TOOLS="vim zsh" tool_wanted zsh
+  ! HAKPAK_TOOLS="vim zshx" tool_wanted zsh
+  ! HAKPAK_TOOLS="" tool_wanted zsh
+}
+
+@test "toolset_plan: each ticked tool goes to one section, in install order" {
+  manifest <<'M'
+a apt x
+a apt y
+b apt y
+b apt z
+M
+  lib
+  HAKPAK_SECTIONS=("a:A" "b:B")
+  run toolset_plan x y z
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [ "$output" = $'a\tx y\nb\tz' ] || { echo "$output"; return 1; }
+}
+
+@test "toolset_plan: a shared tool goes to the section with the largest share of its tools ticked" {
+  manifest <<'M'
+a apt x
+a apt y
+a apt w
+b apt y
+b apt z
+M
+  lib
+  HAKPAK_SECTIONS=("a:A" "b:B")
+  # a has 1 of 3 ticked, b 2 of 2: y comes with b
+  run toolset_plan y z
+  [ "$output" = $'b\ty z' ] || { echo "$output"; return 1; }
+  # a tie goes to the section installed first
+  run toolset_plan x y w z
+  [ "$output" = $'a\tx y w\nb\tz' ] || { echo "$output"; return 1; }
+}
+
+@test "toolset_plan: a section whose ticked tools all come with another is left out" {
+  manifest <<'M'
+a apt x
+a apt y
+b apt y
+M
+  lib
+  HAKPAK_SECTIONS=("a:A" "b:B")
+  run toolset_plan x y
+  [ "$output" = $'a\tx y' ] || { echo "$output"; return 1; }
+}
+
+@test "toolset_plan on the real manifest: ticking top fully installs Claude Code with top, not dev or ai" {
+  lib
+  mapfile -t top < <(toolset_rows top | cut -f3)
+  run toolset_plan "${top[@]}"
+  [ "$output" = "top	${top[*]}" ] || { echo "$output"; return 1; }
+}
+
+@test "toolset_plan on the real manifest: every tool of all sections installs exactly once" {
+  lib
+  mapfile -t all < <(toolset_rows | cut -f3 | sort -u)
+  run toolset_plan "${all[@]}"
+  [ "$status" -eq 0 ]
+  got="$(cut -f2 <<< "$output" | tr ' ' '\n' | sort)"
+  [ "$got" = "$(printf '%s\n' "${all[@]}")" ] || { diff <(echo "$got") <(printf '%s\n' "${all[@]}"); return 1; }
+  # ai's rows all come with dev, which is installed first
+  ! cut -f1 <<< "$output" | grep -qx ai
+}
+
+# --- a section puts a tool's configs in place only when the tool is ticked ---
+
+run_section() {
+  export HAKPAK_SYSROOT="$BATS_TEST_TMPDIR/sysroot" NO_COLOR=1
+  unset SANDBOX_NAME CLAUDE_CONFIG_DIR
+  mkdir -p "$HAKPAK_SYSROOT"
+  run bash "$REPO/install/$1"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+}
+
+@test "top without zsh and tmux leaves the shell configs alone" {
+  HAKPAK_TOOLS="vim fzf" run_section top.sh
+  not_recorded ".zshrc"
+  not_recorded ".tmux.conf"
+  not_recorded ".bashrc"
+  HAKPAK_TOOLS="zsh" run_section top.sh
+  recorded ".zshrc"
+  not_recorded ".tmux.conf"
+}
+
+@test "basic with tmux only links .tmux.conf" {
+  HAKPAK_TOOLS="tmux" run_section basic.sh
+  recorded ".tmux.conf"
+  not_recorded ".zshrc"
+}
+
+@test "dev without git-delta leaves your git config alone, and skips the config hint without claude-code-config" {
+  HAKPAK_TOOLS="ripgrep jq" run_section dev.sh
+  not_recorded "include.path"
+  [[ "$output" != *"/trailofbits:config"* ]] || { echo "$output"; return 1; }
+  [[ "$output" == *"new PATH"* ]]
+}
+
+@test "ai without claude-code-config skips the config hint" {
+  HAKPAK_TOOLS="claude-code" run_section ai.sh
+  [[ "$output" != *"/trailofbits:config"* ]] || { echo "$output"; return 1; }
+  HAKPAK_TOOLS="claude-code-config" run_section ai.sh
+  [[ "$output" == *"/trailofbits:config"* ]]
+}
+
+@test "environment without pipx doesn't run pipx ensurepath" {
+  HAKPAK_TOOLS="python3-pip" run_section enviroment.sh
+  not_recorded "pipx ensurepath"
+  HAKPAK_TOOLS="pipx" run_section enviroment.sh
+  recorded "pipx ensurepath"
+}
+
+@test "rdp without xrdp doesn't configure xrdp" {
+  HAKPAK_TOOLS="xfce4" run_section rdp.sh
+  not_recorded "xrdp.ini"
+  not_recorded "systemctl enable xrdp"
+  HAKPAK_TOOLS="xrdp" run_section rdp.sh
+  recorded "systemctl enable xrdp"
+}

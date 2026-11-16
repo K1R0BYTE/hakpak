@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# hakpak setup: tick sections in a menu, or name them as arguments.
+# hakpak setup: tick sections or single tools in a menu, or name sections
+# as arguments.
 #
-#   setup.sh                         open the menu and tick the sections to install
+#   setup.sh                         open the menu and tick what to install
 #   setup.sh web pentest             only those sections (still in install order)
 #   setup.sh all                     every section, in install order
 #   setup.sh --dry-run [section...]  print what would run, change nothing
@@ -52,6 +53,7 @@ usage() {
   echo "  -h, --help   show this help"
 }
 
+unset HAKPAK_TOOLS
 wanted=()
 all=0
 for arg in "$@"; do
@@ -110,101 +112,189 @@ wrap_tool_names() {
   return 0
 }
 
-# The section menu: one checkbox per section, with the tools it installs
-# (from the Toolset manifest) below it, read key by key from stdin. When the
-# whole list is taller than the terminal, only the section under the cursor
-# shows its tools, cut to the lines the terminal has left. j/k or arrows move, space ticks, a ticks or unticks all,
-# Enter installs, q quits. On WSL the wsl section starts ticked; it installs
-# no tools, so it lists the file it installs. Sets `wanted` to the ticked
-# ids; returns 1 if nothing is installed.
+# Cut a line to at most width-1 columns, so it never reaches the last column.
+_menu_fit() {
+  local line="$1" width="$2"
+  [ "${#line}" -ge "$width" ] && line="${line:0:width-1}"
+  printf '%s' "$line"
+}
+
+# The menu: one checkbox per section and, in the open section, one per tool
+# (from the Toolset manifest). Ticking a section ticks all its tools; a tool
+# listed in several sections is one checkbox, ticked or unticked in all of
+# them, and a section shows [x] (all its tools), [~] (some) or [ ] (none).
+# The section under the cursor lists its tool names below it until it is
+# opened; on a terminal too short for the whole list, the list is cut and an
+# open section scrolls. Read key by key from stdin: j/k or up/down move,
+# l or right opens a section, h or left closes it, space ticks, a ticks or
+# unticks all, Enter installs, q quits. A section with no tools (wsl: only
+# /etc/wsl.conf, ticked on WSL) has a checkbox of its own. Sets `wanted` to
+# the ticked sections without tools and `picked` to the ticked tools;
+# returns 1 if nothing is installed.
 choose_sections() {
-  local ids=() tools=() counts=() i cur=0 key rest note="" lines=0
-  local height cols width=80 full all_rows section name t
+  local ids=() i k cur=0 ctool=-1 open=-1 wtop=0 key rest note="" lines=0
+  local height cols width=80 all_rows section name tnote t
   mapfile -t ids < <(section_ids)
-  local n=${#ids[@]} ticked=() redraw=0
+  local n=${#ids[@]} redraw=0
+  local -a t_name=() t_note=() first=() count=() flag=() preview=() pcount=() out=()
+  local -A on=()
   [ -t 1 ] && redraw=1
   read -r height cols < <(menu_term_size "$redraw")
   [ "${_HAKPAK_MENU_REDRAW:-0}" = 1 ] && redraw=1
   [ "$cols" -gt 0 ] && [ "$cols" -lt "$width" ] && width=$cols
   # One pass over the manifest; a problem with it is reported once.
   all_rows="$(toolset_rows "")" || all_rows=""
-  full=$((n + 3))
   for ((i = 0; i < n; i++)); do
-    ticked[i]=0
-    if [ "${ids[i]}" = wsl ]; then
+    first[i]=${#t_name[@]}
+    flag[i]=0
+    # Not tab-separated for read: it would merge an empty source field.
+    while IFS=$'\x1f' read -r section _ name _ tnote; do
+      [ -n "$name" ] && [ "$section" = "${ids[i]}" ] || continue
+      t_name+=("$name")
+      t_note+=("$tnote")
+      on[$name]=0
+    done <<< "${all_rows//$'\t'/$'\x1f'}"
+    count[i]=$((${#t_name[@]} - first[i]))
+    if [ "${ids[i]}" = wsl ] && [ "${count[i]}" -eq 0 ]; then
       # Only /etc/wsl.conf, no tools; ticked on WSL.
-      is_wsl && ticked[i]=1
-      t="$(echo /etc/wsl.conf | wrap_tool_names "$width")"
+      is_wsl && flag[i]=1
+      t=/etc/wsl.conf
     else
-      t="$(while IFS=$'\t' read -r section _ name _; do
-        [ "$section" = "${ids[i]}" ] && printf '%s\n' "$name"
-      done <<< "$all_rows" | wrap_tool_names "$width")"
+      t="$(printf '%s\n' "${t_name[@]:first[i]:count[i]}")"
     fi
-    tools[i]="$t"
-    counts[i]=0
-    [ -n "$t" ] && counts[i]=$(($(printf '%s\n' "$t" | wc -l)))
-    full=$((full + counts[i]))
+    preview[i]="$(printf '%s\n' "$t" | wrap_tool_names "$width")"
+    pcount[i]=0
+    [ -n "${preview[i]}" ] && pcount[i]=$(($(printf '%s\n' "${preview[i]}" | wc -l)))
   done
-  local compact=0 room=0 shown
-  [ "$height" -gt 0 ] && [ "$full" -ge "$height" ] && compact=1
-  # Compact: the tool lines the terminal has room for, under the cursor.
-  room=$((height - n - 4))
+  # Room for tool lines below the sections; 0 rows known means no limit.
+  local room=1000000 shown ticked_n box mark row
+  [ "$height" -gt 0 ] && room=$((height - n - 4))
   while true; do
+    out=("Arrows or j/k move, l/h open/close, space ticks, a all, Enter installs, q quits")
+    for ((i = 0; i < n; i++)); do
+      mark=" "
+      [ "$i" = "$cur" ] && [ "$ctool" -lt 0 ] && mark=">"
+      if [ "${count[i]}" -eq 0 ]; then
+        box="[ ]"
+        [ "${flag[i]}" = 1 ] && box="[x]"
+        out+=("$mark $box ${ids[i]}")
+      else
+        ticked_n=0
+        for ((k = first[i]; k < first[i] + count[i]; k++)); do
+          [ "${on[${t_name[k]}]}" = 1 ] && ticked_n=$((ticked_n + 1))
+        done
+        box="[~]"
+        [ "$ticked_n" -eq 0 ] && box="[ ]"
+        [ "$ticked_n" -eq "${count[i]}" ] && box="[x]"
+        printf -v row '%s %s %-12s %s' "$mark" "$box" "${ids[i]}" "$ticked_n/${count[i]}"
+        out+=("$row")
+      fi
+      if [ "$i" = "$open" ]; then
+        # The open section's tools, scrolled to keep the cursor in view.
+        shown=${count[i]}
+        [ "$shown" -gt "$room" ] && shown=$room
+        [ "$shown" -lt 1 ] && shown=1
+        [ "$ctool" -ge 0 ] && [ "$ctool" -lt "$wtop" ] && wtop=$ctool
+        [ "$ctool" -ge $((wtop + shown)) ] && wtop=$((ctool - shown + 1))
+        [ "$wtop" -gt $((count[i] - shown)) ] && wtop=$((count[i] - shown))
+        for ((k = wtop; k < wtop + shown; k++)); do
+          mark=" "
+          [ "$k" = "$ctool" ] && mark=">"
+          box="[ ]"
+          [ "${on[${t_name[first[i] + k]}]}" = 1 ] && box="[x]"
+          printf -v row '    %s %s %-24s %s' "$mark" "$box" "${t_name[first[i] + k]}" "${t_note[first[i] + k]}"
+          row="${row%"${row##*[![:space:]]}"}"
+          out+=("$(_menu_fit "$row" "$width")")
+        done
+      elif [ "$i" = "$cur" ] && [ -n "${preview[i]}" ] && [ "$room" -gt 0 ]; then
+        # A list longer than the room left is cut, and says so.
+        shown=${pcount[i]}
+        if [ "$shown" -gt "$room" ]; then
+          shown=$room
+          [ "$shown" -gt 1 ] && mapfile -t -O "${#out[@]}" out < <(printf '%s\n' "${preview[i]}" | head -n $((shown - 1)))
+          out+=("      ...")
+        else
+          mapfile -t -O "${#out[@]}" out <<< "${preview[i]}"
+        fi
+      fi
+    done
+    out+=("" "$note")
+    note=""
     # On a terminal, draw over the last frame instead of below it.
     if [ "$lines" -gt 0 ] && [ "$redraw" = 1 ]; then
       printf '\033[%dA\033[J' "$lines"
     fi
-    lines=$((n + 3))
-    echo "Arrows or j/k move, space ticks, a ticks all, Enter installs, q quits"
-    for ((i = 0; i < n; i++)); do
-      local box="[ ]" mark=" "
-      [ "${ticked[i]}" = 1 ] && box="[x]"
-      [ "$i" = "$cur" ] && mark=">"
-      printf '%s %s %s\n' "$mark" "$box" "${ids[i]}"
-      if [ -n "${tools[i]}" ] && [ "$compact" = 0 ]; then
-        printf '%s\n' "${tools[i]}"
-        lines=$((lines + counts[i]))
-      elif [ -n "${tools[i]}" ] && [ "$i" = "$cur" ] && [ "$room" -gt 0 ]; then
-        # A list longer than the room left is cut, and says so.
-        shown=${counts[i]}
-        if [ "$shown" -gt "$room" ]; then
-          shown=$room
-          [ "$shown" -gt 1 ] && printf '%s\n' "${tools[i]}" | head -n $((shown - 1))
-          echo "      ..."
-        else
-          printf '%s\n' "${tools[i]}"
-        fi
-        lines=$((lines + shown))
-      fi
-    done
-    echo
-    echo "$note"
-    note=""
+    printf '%s\n' "${out[@]}"
+    lines=${#out[@]}
     IFS= read -rsn1 key || { echo "Nothing installed"; return 1; }
     if [ "$key" = $'\033' ]; then
       IFS= read -rsn2 -t 1 rest || true
       case "$rest" in
         "[A" | OA) key=k ;;
         "[B" | OB) key=j ;;
+        "[C" | OC) key=l ;;
+        "[D" | OD) key=h ;;
         *) continue ;;
       esac
     fi
     case "$key" in
-      k) [ "$cur" -gt 0 ] && cur=$((cur - 1)) ;;
-      j) [ "$cur" -lt $((n - 1)) ] && cur=$((cur + 1)) ;;
-      " ") ticked[cur]=$((1 - ticked[cur])) ;;
+      j)
+        if [ "$open" = "$cur" ] && [ "$ctool" -lt $((count[cur] - 1)) ]; then
+          ctool=$((ctool + 1))
+        elif [ "$cur" -lt $((n - 1)) ]; then
+          cur=$((cur + 1)) ctool=-1 open=-1
+        fi
+        ;;
+      k)
+        if [ "$ctool" -ge 0 ]; then
+          ctool=$((ctool - 1))
+        elif [ "$cur" -gt 0 ]; then
+          cur=$((cur - 1)) open=-1
+        fi
+        ;;
+      l)
+        if [ "${count[cur]}" -gt 0 ]; then
+          [ "$open" = "$cur" ] || wtop=0
+          open=$cur
+          [ "$ctool" -lt 0 ] && ctool=0
+        fi
+        ;;
+      h) open=-1 ctool=-1 ;;
+      " ")
+        if [ "$ctool" -ge 0 ]; then
+          name="${t_name[first[cur] + ctool]}"
+          on[$name]=$((1 - on[$name]))
+        elif [ "${count[cur]}" -eq 0 ]; then
+          flag[cur]=$((1 - flag[cur]))
+        else
+          local v=0
+          for ((k = first[cur]; k < first[cur] + count[cur]; k++)); do
+            [ "${on[${t_name[k]}]}" = 0 ] && v=1
+          done
+          for ((k = first[cur]; k < first[cur] + count[cur]; k++)); do
+            on[${t_name[k]}]=$v
+          done
+        fi
+        ;;
       a)
-        local v=1
-        [[ " ${ticked[*]} " != *" 0 "* ]] && v=0
-        for ((i = 0; i < n; i++)); do ticked[i]=$v; done
+        local v=0
+        for name in "${!on[@]}"; do [ "${on[$name]}" = 0 ] && v=1; done
+        for ((i = 0; i < n; i++)); do
+          [ "${count[i]}" -eq 0 ] && [ "${flag[i]}" = 0 ] && v=1
+        done
+        for name in "${!on[@]}"; do on[$name]=$v; done
+        for ((i = 0; i < n; i++)); do flag[i]=$v; done
         ;;
       q) echo "Nothing installed"; return 1 ;;
       "")
-        wanted=()
+        wanted=() picked=()
         for ((i = 0; i < n; i++)); do
-          [ "${ticked[i]}" = 1 ] && wanted+=("${ids[i]}")
+          [ "${count[i]}" -eq 0 ] && [ "${flag[i]}" = 1 ] && wanted+=("${ids[i]}")
         done
-        [ "${#wanted[@]}" -gt 0 ] && return 0
+        for name in "${t_name[@]}"; do
+          [ "${on[$name]}" = 1 ] && ! _toolset_known "$name" "${picked[@]}" && picked+=("$name")
+        done
+        [ "$((${#wanted[@]} + ${#picked[@]}))" -gt 0 ] && return 0
         note="Tick at least one section with space, or press q to quit"
         ;;
     esac
@@ -225,22 +315,67 @@ if [ "${HAKPAK_DRY_RUN:-0}" = "1" ]; then
   log_ok "Dry run: nothing is installed or changed"
 fi
 
+# What to install: the tools ticked in the menu, or every tool of the named
+# sections; a section with no tools in the manifest (wsl) is run as it is.
+manifest_rows="$(toolset_rows "" 2>/dev/null)" || manifest_rows=""
+picked=() chosen=()
 if [ "${#wanted[@]}" -eq 0 ]; then
   choose_sections || exit 1
+else
+  chosen=("${wanted[@]}")
+  named=("${wanted[@]}")
+  wanted=()
+  for id in "${named[@]}"; do
+    if grep -q "^$id"$'\t' <<< "$manifest_rows"; then
+      mapfile -t -O "${#picked[@]}" picked < <(awk -F'\t' -v s="$id" '$1 == s { print $3 }' <<< "$manifest_rows")
+    else
+      wanted+=("$id")
+    fi
+  done
 fi
 
-# Install order, whatever order the sections were named in; each runs once.
+# The plan: each ticked tool is installed once, by one section (see
+# toolset_plan). Sections with no tools are added in install order.
+declare -A plan=() owner=()
+if [ "${#picked[@]}" -gt 0 ]; then
+  while IFS=$'\t' read -r id tools; do
+    [ -n "$id" ] || continue
+    plan[$id]="$tools"
+    for t in $tools; do owner[$t]="$id"; done
+  done < <(toolset_plan "${picked[@]}")
+fi
+# From the menu, the sections with a ticked tool count as chosen.
+if [ "${#chosen[@]}" -eq 0 ]; then
+  while IFS=$'\t' read -r section _ name _; do
+    [ -n "${owner[$name]:-}" ] && ! _toolset_known "$section" "${chosen[@]}" && chosen+=("$section")
+  done <<< "$manifest_rows"
+fi
 selected=()
 while IFS= read -r id; do
-  if _toolset_known "$id" "${wanted[@]}"; then
+  if [ -n "${plan[$id]+x}" ] || _toolset_known "$id" "${wanted[@]}"; then
     selected+=("$id")
+    continue
+  fi
+  # A chosen section whose tools all come with others.
+  _toolset_known "$id" "${chosen[@]}" || continue
+  others=()
+  while IFS=$'\t' read -r section _ name _; do
+    [ "$section" = "$id" ] && [ -n "${owner[$name]:-}" ] || continue
+    _toolset_known "${owner[$name]}" "${others[@]}" || others+=("${owner[$name]}")
+  done <<< "$manifest_rows"
+  if [ "${#others[@]}" -gt 0 ]; then
+    log_ok "Section $id: its tools come with ${others[*]}"
   fi
 done < <(section_ids)
 
 failed=()
 for id in "${selected[@]}"; do
   echo "== Section: $id"
-  bash "$HAKPAK_ROOT/install/$(section_script "$id")" || failed+=("$id")
+  if [ -n "${plan[$id]+x}" ]; then
+    HAKPAK_TOOLS="${plan[$id]}" bash "$HAKPAK_ROOT/install/$(section_script "$id")" || failed+=("$id")
+  else
+    bash "$HAKPAK_ROOT/install/$(section_script "$id")" || failed+=("$id")
+  fi
 done
 
 echo
@@ -251,4 +386,6 @@ fi
 log_ok "Done: ${selected[*]}"
 
 # With zsh just installed, hand the terminal over to it (see lib.sh).
-start_zsh_now "${selected[@]}"
+if [ -n "${owner[zsh]:-}" ] || [ "${#picked[@]}" -eq 0 ]; then
+  start_zsh_now "${selected[@]}"
+fi

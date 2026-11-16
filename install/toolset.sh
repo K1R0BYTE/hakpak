@@ -5,7 +5,10 @@
 #   toolset_rows [section]   one tab-separated line per tool:
 #                            section, kind, name, source, note
 #   toolset_check            report every problem in the manifest
-#   install_section <id>     install_tool every row of one section (lib.sh)
+#   install_section <id>     install_tool every row of one section (lib.sh),
+#                            or only the tools in HAKPAK_TOOLS when it is set
+#   tool_wanted <name>       true unless HAKPAK_TOOLS is set without <name>
+#   toolset_plan <tool...>   which section installs each ticked tool
 #
 # Manifest rows are whitespace-separated: section kind name [source...]
 # A `#` at the start of a line, or after a space, starts a comment; on a tool
@@ -149,6 +152,60 @@ toolset_check() {
   return 1
 }
 
+# HAKPAK_TOOLS, when set, is the space-separated list of the tools a section
+# installs (setup.sh sets it from the menu and its plan); unset, it is all
+# of them. Section scripts also ask it before putting a tool's configs in
+# place.
+tool_wanted() {
+  [ -z "${HAKPAK_TOOLS+x}" ] && return 0
+  [[ " $HAKPAK_TOOLS " == *" $1 "* ]]
+}
+
+# The install plan for a set of ticked tools: one line per section that
+# installs any, "<section><TAB><tools>", in install order, its tools in
+# manifest order. A tool listed in several sections is installed once, by
+# the section with the largest share of its tools ticked (a tie goes to the
+# section installed first), so ticking all of top brings Claude Code with
+# top, not with dev or ai. A section whose ticked tools all come with
+# another is left out.
+toolset_plan() {
+  local rows section name n i owner best_on best_total id
+  local -A ticked=() total=() on=() owner_of=()
+  local -a ids=() order=()
+  for name in "$@"; do ticked[$name]=1; done
+  rows="$(toolset_rows "")" || return 1
+  for i in "${HAKPAK_SECTIONS[@]}"; do ids+=("${i%%:*}"); done
+  while IFS=$'\t' read -r section _ name _; do
+    [ -n "$name" ] || continue
+    total[$section]=$((${total[$section]:-0} + 1))
+    [ -n "${ticked[$name]:-}" ] && on[$section]=$((${on[$section]:-0} + 1))
+  done <<< "$rows"
+  # Owners: compare on/total as on_a * total_b > on_b * total_a.
+  for id in "${ids[@]}"; do
+    while IFS=$'\t' read -r section _ name _; do
+      [ "$section" = "$id" ] && [ -n "${ticked[$name]:-}" ] || continue
+      owner="${owner_of[$name]:-}"
+      if [ -z "$owner" ]; then
+        owner_of[$name]="$id"
+        continue
+      fi
+      best_on=${on[$owner]} best_total=${total[$owner]}
+      if [ $((on[$id] * best_total)) -gt $((best_on * total[$id])) ]; then
+        owner_of[$name]="$id"
+      fi
+    done <<< "$rows"
+  done
+  for id in "${ids[@]}"; do
+    order=()
+    while IFS=$'\t' read -r section _ name _; do
+      [ "$section" = "$id" ] && [ "${owner_of[$name]:-}" = "$id" ] && order+=("$name")
+    done <<< "$rows"
+    n=${#order[@]}
+    [ "$n" -gt 0 ] && printf '%s\t%s\n' "$id" "${order[*]}"
+  done
+  return 0
+}
+
 # Replace $HOME and $HAKPAK_OPT in one source field. Nothing else expands.
 # The replacements are quoted so an `&` in them stays literal (bash 5.2).
 _toolset_expand() {
@@ -175,6 +232,18 @@ install_section() {
     echo "toolset: no tools in section $id"
     HAKPAK_FAILED+=("section $id")
     return 1
+  fi
+  if [ -n "${HAKPAK_TOOLS+x}" ]; then
+    local -a picked=()
+    for row in "${rows[@]}"; do
+      IFS="$_TS" read -r _ _ _ name _ <<< "$row"
+      tool_wanted "$name" && picked+=("$row")
+    done
+    if [ "${#picked[@]}" -eq 0 ]; then
+      log_ok "Section $id: nothing ticked here"
+      return 0
+    fi
+    rows=("${picked[@]}")
   fi
   for row in "${rows[@]}"; do
     IFS="$_TS" read -r _ _ kind name src _ <<< "$row"

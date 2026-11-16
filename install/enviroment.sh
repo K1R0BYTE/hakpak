@@ -7,6 +7,8 @@ require_normal_user
 
 # Python: system pip stays untouched (PEP 668); tools go through pipx or a venv.
 install_section environment
-step "pipx path" pipx ensurepath
+if tool_wanted pipx; then
+  step "pipx path" pipx ensurepath
+fi
 
 install_summary
