@@ -167,14 +167,30 @@ tool_wanted() {
 # the section with the largest share of its tools ticked (a tie goes to the
 # section installed first), so ticking all of top brings Claude Code with
 # top, not with dev or ai. A section whose ticked tools all come with
-# another is left out.
+# another is left out. A ticked tool brings the tools it needs (_toolset_needs)
+# when its own section lists them, ticked or not, and they are installed
+# no later than it.
 toolset_plan() {
-  local rows section name n i owner best_on best_total id
-  local -A ticked=() total=() on=() owner_of=()
+  local rows section kind name n i owner best_on best_total id p
+  local -A ticked=() total=() on=() owner_of=() listed=() pos=()
   local -a ids=() order=()
   for name in "$@"; do ticked[$name]=1; done
   rows="$(toolset_rows "")" || return 1
   for i in "${HAKPAK_SECTIONS[@]}"; do ids+=("${i%%:*}"); done
+  for i in "${!ids[@]}"; do pos[${ids[i]}]=$i; done
+  while IFS=$'\t' read -r section _ name _; do
+    [ -n "$name" ] && listed[$section/$name]=1
+  done <<< "$rows"
+  # Prerequisites listed in the same section come along (twice: a plugin
+  # needs the marketplaces, which need claude-code).
+  for _ in 1 2; do
+    while IFS=$'\t' read -r section kind name _; do
+      [ -n "${ticked[$name]:-}" ] || continue
+      for p in $(_toolset_needs "$kind" "$name"); do
+        [ -n "${listed[$section/$p]:-}" ] && ticked[$p]=1
+      done
+    done <<< "$rows"
+  done
   while IFS=$'\t' read -r section _ name _; do
     [ -n "$name" ] || continue
     total[$section]=$((${total[$section]:-0} + 1))
@@ -195,6 +211,17 @@ toolset_plan() {
       fi
     done <<< "$rows"
   done
+  # A prerequisite goes no later than a section that installs a tool
+  # needing it, if that section lists it.
+  for _ in 1 2 3; do
+    while IFS=$'\t' read -r section kind name _; do
+      [ -n "${ticked[$name]:-}" ] && [ "${owner_of[$name]}" = "$section" ] || continue
+      for p in $(_toolset_needs "$kind" "$name"); do
+        [ -n "${owner_of[$p]:-}" ] && [ -n "${listed[$section/$p]:-}" ] || continue
+        [ "${pos[${owner_of[$p]}]}" -gt "${pos[$section]}" ] && owner_of[$p]="$section"
+      done
+    done <<< "$rows"
+  done
   for id in "${ids[@]}"; do
     order=()
     while IFS=$'\t' read -r section _ name _; do
@@ -204,6 +231,20 @@ toolset_plan() {
     [ "$n" -gt 0 ] && printf '%s\t%s\n' "$id" "${order[*]}"
   done
   return 0
+}
+
+# The tools a tool needs installed first: _toolset_needs <kind> <name>
+_toolset_needs() {
+  case "$1" in
+    go) echo go ;;
+    uv) echo uv ;;
+    plugin) echo claude-code claude-marketplaces ;;
+  esac
+  case "$2" in
+    python) echo uv ;;
+    node) echo fnm ;;
+    claude-marketplaces) echo claude-code ;;
+  esac
 }
 
 # Replace $HOME and $HAKPAK_OPT in one source field. Nothing else expands.

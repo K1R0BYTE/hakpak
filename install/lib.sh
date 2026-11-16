@@ -425,8 +425,8 @@ link_dev_configs() {
 # command in their repo, which the section cloned.
 claude_config_hint() {
   local dir="$HAKPAK_OPT/claude-code-config"
-  echo
   tool_wanted claude-code-config || return 0
+  echo
   # Only when the clone is there (a dry run assumes it).
   if [ -d "$dir/.git" ] || [ "${HAKPAK_DRY_RUN:-0}" = "1" ]; then
     log_ok "For the Claude Code config (CLAUDE.md, language rules): cd $dir && claude, then run /trailofbits:config"
@@ -436,9 +436,18 @@ claude_config_hint() {
   fi
 }
 
-# The dev section's closing hint: the Claude Code config, and the new PATH.
+# The dev section's closing hint: the Claude Code config, and the new PATH
+# when a tool that lives in ~/.cargo/bin, ~/.local/bin or fnm's Node is
+# installed.
 dev_hint() {
+  local t
   claude_config_hint
+  for t in fd uv python ast-grep ruff ty zizmor prek fnm node go actionlint rust; do
+    tool_wanted "$t" && break
+    t=""
+  done
+  [ -n "$t" ] || return 0
+  echo
   echo "Open a new shell (or log out and in) for the new PATH: the tools in ~/.cargo/bin, ~/.local/bin and fnm's Node."
 }
 

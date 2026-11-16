@@ -272,6 +272,21 @@ no_real_calls() {
     [ "${#line}" -lt 50 ] || { echo "too wide (${#line}): $line"; return 1; }
   done < <(grep -E '^    [> ] \[' <<< "$output")
   [[ "$output" == *"claude-code-config"* ]]
+  # and so is the key help at the top
+  COLUMNS=50 menu_keys 'q' --dry-run
+  while IFS= read -r line; do
+    [ "${#line}" -lt 50 ] || { echo "too wide (${#line}): $line"; return 1; }
+  done < <(grep -E '^Arrows' <<< "$output")
+}
+
+@test "menu: the key help fits 72 columns uncut" {
+  COLUMNS=72 menu_keys 'q' --dry-run
+  [[ "$output" == *"Enter installs, q quit"$'\n'* ]] || { echo "$output"; return 1; }
+}
+
+@test "menu: a section you didn't touch says nothing about tools it shares" {
+  menu_keys ' \n' --dry-run
+  [[ "$output" != *"come with"* ]] || { echo "$output"; return 1; }
 }
 
 @test "menu: only the section under the cursor lists its tools" {

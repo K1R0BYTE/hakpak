@@ -170,7 +170,7 @@ choose_sections() {
   local room=1000000 shown ticked_n box mark row
   [ "$height" -gt 0 ] && room=$((height - n - 4))
   while true; do
-    out=("Arrows or j/k move, l/h open/close, space ticks, a all, Enter installs, q quits")
+    out=("$(_menu_fit "Arrows or j/k move, l opens, space ticks, a all, Enter installs, q quit" "$width")")
     for ((i = 0; i < n; i++)); do
       mark=" "
       [ "$i" = "$cur" ] && [ "$ctool" -lt 0 ] && mark=">"
@@ -326,8 +326,9 @@ else
   named=("${wanted[@]}")
   wanted=()
   for id in "${named[@]}"; do
-    if grep -q "^$id"$'\t' <<< "$manifest_rows"; then
-      mapfile -t -O "${#picked[@]}" picked < <(awk -F'\t' -v s="$id" '$1 == s { print $3 }' <<< "$manifest_rows")
+    tools="$(toolset_rows "$id" 2>/dev/null | cut -f3)"
+    if [ -n "$tools" ]; then
+      mapfile -t -O "${#picked[@]}" picked <<< "$tools"
     else
       wanted+=("$id")
     fi
@@ -344,19 +345,13 @@ if [ "${#picked[@]}" -gt 0 ]; then
     for t in $tools; do owner[$t]="$id"; done
   done < <(toolset_plan "${picked[@]}")
 fi
-# From the menu, the sections with a ticked tool count as chosen.
-if [ "${#chosen[@]}" -eq 0 ]; then
-  while IFS=$'\t' read -r section _ name _; do
-    [ -n "${owner[$name]:-}" ] && ! _toolset_known "$section" "${chosen[@]}" && chosen+=("$section")
-  done <<< "$manifest_rows"
-fi
 selected=()
 while IFS= read -r id; do
   if [ -n "${plan[$id]+x}" ] || _toolset_known "$id" "${wanted[@]}"; then
     selected+=("$id")
     continue
   fi
-  # A chosen section whose tools all come with others.
+  # A named section whose tools all come with others says so.
   _toolset_known "$id" "${chosen[@]}" || continue
   others=()
   while IFS=$'\t' read -r section _ name _; do

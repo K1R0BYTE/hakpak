@@ -598,6 +598,9 @@ run_section() {
   HAKPAK_TOOLS="ripgrep jq" run_section dev.sh
   not_recorded "include.path"
   [[ "$output" != *"/trailofbits:config"* ]] || { echo "$output"; return 1; }
+  # nothing new on PATH either
+  [[ "$output" != *"new PATH"* ]] || { echo "$output"; return 1; }
+  HAKPAK_TOOLS="rust" run_section dev.sh
   [[ "$output" == *"new PATH"* ]]
 }
 
@@ -608,7 +611,7 @@ run_section() {
   [[ "$output" == *"/trailofbits:config"* ]]
 }
 
-@test "environment without pipx doesn't run pipx ensurepath" {
+@test "environment without pipx (and none installed) doesn't run pipx ensurepath" {
   HAKPAK_TOOLS="python3-pip" run_section enviroment.sh
   not_recorded "pipx ensurepath"
   HAKPAK_TOOLS="pipx" run_section enviroment.sh
@@ -621,4 +624,40 @@ run_section() {
   not_recorded "systemctl enable xrdp"
   HAKPAK_TOOLS="xrdp" run_section rdp.sh
   recorded "systemctl enable xrdp"
+}
+
+@test "toolset_plan: a tool's prerequisite in its section comes along, even unticked" {
+  manifest <<'M'
+a custom uv _install_uv_release
+a uv ruff
+a custom claude-code _install_claude_code
+a custom claude-marketplaces _install_claude_marketplaces
+a plugin p1 trailofbits
+a custom go _install_go_toolchain
+a go actionlint github.com/rhysd/actionlint/cmd/actionlint@latest
+b go httpx github.com/projectdiscovery/httpx/cmd/httpx@latest
+M
+  lib
+  HAKPAK_SECTIONS=("a:A" "b:B")
+  run toolset_plan ruff p1 actionlint
+  [ "$output" = $'a\tuv ruff claude-code claude-marketplaces p1 go actionlint' ] || { echo "$output"; return 1; }
+  # a section that doesn't list go is left to bring its own, as before
+  run toolset_plan httpx
+  [ "$output" = $'b\thttpx' ] || { echo "$output"; return 1; }
+}
+
+@test "toolset_plan: a prerequisite is installed no later than the tool that needs it" {
+  manifest <<'M'
+a custom go _install_go_toolchain
+a go actionlint github.com/rhysd/actionlint/cmd/actionlint@latest
+a apt a1
+a apt a2
+b apt b1
+b custom go _install_go_toolchain
+M
+  lib
+  HAKPAK_SECTIONS=("a:A" "b:B")
+  # b has the larger share of go, but a needs it first
+  run toolset_plan actionlint b1 go
+  [ "$output" = $'a\tgo actionlint\nb\tb1' ] || { echo "$output"; return 1; }
 }
