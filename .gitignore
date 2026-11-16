@@ -1,0 +1,40 @@
+# hakpak's own ignore file. The shared part is the global gitignore the Dev
+# section installs (configs/git/gitignore); keep the two in step, which
+# tests/gitignore.bats checks. Nothing here may hide a tracked file, so no
+# pattern for .claude/ or configs/.
+
+# This repo: per-user Claude Code settings and local secrets
+.claude/settings.local.json
+.env
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Python
+*.pyc
+*.pyo
+__pycache__/
+*.egg-info/
+.eggs/
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+.npm/
+
+# Editors
+*.swp
+*.swo
+*~
+.idea/
+*.sublime-*
+
+# Misc
+.env.local
+.env.*.local
