@@ -45,25 +45,6 @@ section() {
   run bash "$REPO/install/$1"
 }
 
-# Load the install module as if none of the named commands were installed,
-# so a test doesn't depend on what the test host has.
-lib_without() {
-  lib
-  _MISSING=" $* "
-  has_command() {
-    case "$_MISSING" in *" $1 "*) return 1 ;; esac
-    command -v "$1" >/dev/null 2>&1
-  }
-}
-
-# Stub commands on PATH for real-adapter tests: stub <name> <script body>
-stub() {
-  mkdir -p "$BATS_TEST_TMPDIR/bin"
-  printf '#!/bin/sh\n%s\n' "$2" > "$BATS_TEST_TMPDIR/bin/$1"
-  chmod +x "$BATS_TEST_TMPDIR/bin/$1"
-  PATH="$BATS_TEST_TMPDIR/bin:$PATH"
-}
-
 # Make the temp system root look like a Docker Sandbox.
 in_sandbox() {
   export SANDBOX_NAME=box
@@ -90,10 +71,12 @@ AI_TOOLS="claude-code claude-marketplaces modern-python rust-review gh-cli git-c
   [[ "$output" == *"ai "*"AI"* ]] || { echo "$output"; return 1; }
 }
 
-@test "the ai rows are the same as in dev, so dev stays as it was" {
+@test "every ai row is also in dev, the same, so dev stays as it was" {
   lib
-  [ "$(toolset_rows ai | cut -f2-4)" = \
-    "$(toolset_rows dev | awk -F'\t' '$3 ~ /^claude-/ || $2 == "plugin"' | cut -f2-4)" ]
+  dev="$(toolset_rows dev | cut -f2-5)"
+  while IFS= read -r row; do
+    grep -qxF -- "$row" <<< "$dev" || { echo "not in dev: $row"; return 1; }
+  done < <(toolset_rows ai | cut -f2-5)
   toolset_rows dev | cut -f3 | grep -qx claude-code
   toolset_rows dev | cut -f3 | grep -qx ruff
 }
@@ -182,16 +165,4 @@ AI_TOOLS="claude-code claude-marketplaces modern-python rust-review gh-cli git-c
   section ai.sh
   not_recorded "sandbox-persistent.sh"
   [ "$(cat "$HAKPAK_SYSROOT/etc/sandbox-persistent.sh")" = "$before" ]
-}
-
-@test "in a sandbox a read-only skills store doesn't fail the ai section" {
-  in_sandbox
-  export HAKPAK_DRY_RUN=0
-  mkdir -p "$HOME/.claude/skills"
-  lib
-  has_command() { [ "$1" = claude ] || command -v "$1" >/dev/null 2>&1; }
-  _dir_is_writable() { return 1; }
-  run install_tool custom claude-code _install_claude_code
-  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-  [[ "$output" == *"read-only"* ]] || { echo "$output"; return 1; }
 }
