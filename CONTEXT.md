@@ -18,6 +18,8 @@
 
 **Config**: a dotfile or system file kept in `configs/` and put in place on install by `link_config`: symlinked in your home, copied under `/etc`. A real file it replaces is backed up once to `<file>.bak`; re-runs are no-ops.
 
+**Native install**: how hakpak installs Claude Code (`_install_claude_code`): the release manifest's signature is checked against `install/keys/claude-code.asc`, the binary against the manifest's sha256, then `claude install latest` puts the launcher in `~/.local/bin` and keeps it updated. A native install is kept; the apt package `claude-code` is replaced by it (native first, then the package and hakpak's repo list are removed); any other `claude` is kept. On WSL a `claude` under `/mnt` is Windows' and doesn't count.
+
 **Skills**: the agent skills kept in `.claude/skills`, one directory with a `SKILL.md` each. The Top section links each into `~/.claude/skills` (`_link_claude_skills`) when it installs Claude Code; a skill of the same name you already have is kept.
 
 **AI section**: the Claude Code part of Dev on its own (`install/ai.sh`): Claude Code with the Skills, the plugin marketplaces and skill plugins, and Trail of Bits' claude-code-config. Dev keeps the same rows.

@@ -24,7 +24,7 @@ top  custom  oh-my-zsh  _install_oh_my_zsh        # with zsh-syntax-highlighting
 top  custom  starship  _install_starship          # prompt for the hakpak themes, release binary, checksum checked
 top  apt     tmux                                 # with the hakpak config
 top  git     tpm  https://github.com/tmux-plugins/tpm  $HOME/.tmux/plugins/tpm
-top  custom  claude-code  _install_claude_code    # Claude Code CLI from Anthropic's apt repo (stable), with the skills from .claude/skills
+top  custom  claude-code  _install_claude_code    # Claude Code CLI, the native install that updates itself (an apt install moves to it), with the skills from .claude/skills
 
 # --- Dev ---
 # A developer environment: search and shell tools, the Python, Node, Go and
@@ -51,7 +51,7 @@ dev  custom  node  _install_node                  # Node 22 from fnm, with pnpm 
 dev  custom  go  _install_go_toolchain  # latest Go from go.dev, in /usr/local/go
 dev  go      actionlint  github.com/rhysd/actionlint/cmd/actionlint@latest  # GitHub Actions linter
 dev  custom  rust  _install_rust                  # stable Rust with clippy and rustfmt, from rustup-init, checksum checked
-dev  custom  claude-code  _install_claude_code    # Claude Code CLI from Anthropic's apt repo (stable), with the skills from .claude/skills
+dev  custom  claude-code  _install_claude_code    # Claude Code CLI, the native install that updates itself (an apt install moves to it), with the skills from .claude/skills
 dev  custom  claude-marketplaces  _install_claude_marketplaces  # trailofbits/skills, trailofbits/skills-curated, anthropics/skills and hakpak's own
 dev  plugin  modern-python           trailofbits  # uv, ruff, ty and pytest for Python projects
 dev  plugin  rust-review             trailofbits  # Rust security review
@@ -67,7 +67,7 @@ dev  git     claude-code-config  https://github.com/trailofbits/claude-code-conf
 # Claude Code with hakpak's skills, the plugin marketplaces and the skill
 # plugins, and Trail of Bits' Claude Code config. The same rows as in dev,
 # which keeps them, so either section sets up Claude Code on its own.
-ai  custom  claude-code  _install_claude_code    # Claude Code CLI from Anthropic's apt repo (stable), with the skills from .claude/skills
+ai  custom  claude-code  _install_claude_code    # Claude Code CLI, the native install that updates itself (an apt install moves to it), with the skills from .claude/skills
 ai  custom  claude-marketplaces  _install_claude_marketplaces  # trailofbits/skills, trailofbits/skills-curated, anthropics/skills and hakpak's own
 ai  plugin  modern-python           trailofbits  # uv, ruff, ty and pytest for Python projects
 ai  plugin  rust-review             trailofbits  # Rust security review
