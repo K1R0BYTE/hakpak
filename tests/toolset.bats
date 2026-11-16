@@ -611,7 +611,16 @@ run_section() {
   [[ "$output" == *"/trailofbits:config"* ]]
 }
 
+@test "environment with pipx already installed runs pipx ensurepath even when pipx is unticked" {
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  printf '#!/bin/sh\nexit 0\n' > "$BATS_TEST_TMPDIR/bin/pipx"
+  chmod +x "$BATS_TEST_TMPDIR/bin/pipx"
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" HAKPAK_TOOLS="python3-pip" run_section enviroment.sh
+  recorded "pipx ensurepath"
+}
+
 @test "environment without pipx (and none installed) doesn't run pipx ensurepath" {
+  if command -v pipx >/dev/null; then skip "pipx is installed on this host"; fi
   HAKPAK_TOOLS="python3-pip" run_section enviroment.sh
   not_recorded "pipx ensurepath"
   HAKPAK_TOOLS="pipx" run_section enviroment.sh
