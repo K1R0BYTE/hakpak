@@ -7,6 +7,9 @@ require_normal_user
 
 # Python: system pip stays untouched (PEP 668); tools go through pipx or a venv.
 install_section environment
-step "pipx path" pipx ensurepath
+# Also for a pipx you already have: web, cloud, cicd and mitm install with it.
+if tool_wanted pipx || has_command pipx; then
+  step "pipx path" pipx ensurepath
+fi
 
 install_summary

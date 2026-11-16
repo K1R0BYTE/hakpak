@@ -24,10 +24,10 @@ git clone https://github.com/K1R0BYTE/hakpak.git ${HOME}/.hakpak && cd ${HOME}/.
 bash setup.sh
 ```
 
-With no arguments `setup.sh` opens a menu that lists each section with the tools it installs: move with the arrow keys (or j/k), tick sections with space (`a` ticks all), press Enter to install the ticked ones, or q to quit. The menu needs a terminal; in scripts and CI, name the sections or pass `all`. You can also name sections to install only those, in install order, or pass `all`; `--dry-run` prints what would run and changes nothing:
+With no arguments `setup.sh` opens a menu that lists each section with how many of its tools are ticked: move with the arrow keys (or j/k), tick a section with space to tick all its tools (`a` ticks everything), press the right arrow (or l) to open a section and untick the tools you don't need one by one (left arrow or h closes it), Enter installs what is ticked, q quits. A section shows `[x]` when all its tools are ticked, `[~]` when some are. A tool listed in several sections, like claude-code in `top`, `dev` and `ai`, is one checkbox: ticking `top` ticks it in `dev` and `ai` too, and it installs once, with the ticked section that has the largest share of its tools ticked. A section installs the configs of the tools ticked in it (unticking zsh leaves `.zshrc` alone). A tool still brings what it needs from its own section, ticked or not: the uv tools bring uv, the Go tools of `dev` bring Go, and the plugins bring Claude Code and the marketplaces. The menu needs a terminal; in scripts and CI, name the sections or pass `all`. You can also name sections to install all their tools, in install order, or pass `all`; a tool shared by named sections installs once there too, so `all` installs `ai` with `dev`. `--dry-run` prints what would run and changes nothing:
 
 ```
-bash setup.sh                        # menu: tick the sections to install
+bash setup.sh                        # menu: tick sections and tools to install
 bash setup.sh web pentest            # only Web Tools and Pentest Tools
 bash setup.sh all                    # every section
 bash setup.sh --dry-run all          # everything, without installing

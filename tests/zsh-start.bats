@@ -295,9 +295,11 @@ EOF
 
 @test "setup.sh starts zsh only after a run with no failed section" {
   s="$REPO/install/setup.sh"
-  grep -q '^start_zsh_now "\${selected\[@\]}"$' "$s"
-  [ "$(grep -n '^start_zsh_now' "$s" | cut -d: -f1)" -gt "$(grep -n 'Failed sections' "$s" | cut -d: -f1)" ]
-  [ "$(grep -n '^start_zsh_now' "$s" | cut -d: -f1)" -eq "$(wc -l < "$s")" ]
+  grep -qE '^ *start_zsh_now "\$\{selected\[@\]\}"$' "$s"
+  line="$(grep -nE '^ *start_zsh_now' "$s" | cut -d: -f1)"
+  [ "$line" -gt "$(grep -n 'Failed sections' "$s" | cut -d: -f1)" ]
+  # the last step: only the end of its if follows
+  [ "$(sed -n "$((line + 1)),\$p" "$s")" = fi ]
 }
 
 @test "a dry run on a terminal never starts zsh" {

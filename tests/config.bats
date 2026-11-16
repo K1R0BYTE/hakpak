@@ -245,10 +245,10 @@ section() {
 }
 
 @test "basic and top link the shell dotfiles with link_config and merge history, in one shared step" {
-  grep -q '^  step .zshrc link_config zsh/.zshrc' "$REPO/install/lib.sh"
-  grep -q '^  step .dircolors link_config .dircolors' "$REPO/install/lib.sh"
-  grep -q '^  step .tmux.conf link_config tmux/.tmux.conf' "$REPO/install/lib.sh"
-  grep -q '^  step .zsh_history merge_history zsh/.zsh_history' "$REPO/install/lib.sh"
+  grep -qE '^ +step .zshrc link_config zsh/.zshrc' "$REPO/install/lib.sh"
+  grep -qE '^ +step .dircolors link_config .dircolors' "$REPO/install/lib.sh"
+  grep -qE '^ +step .tmux.conf link_config tmux/.tmux.conf' "$REPO/install/lib.sh"
+  grep -qE '^ +step .zsh_history merge_history zsh/.zsh_history' "$REPO/install/lib.sh"
   grep -qx 'link_shell_configs' "$REPO/install/basic.sh"
   grep -qx 'link_shell_configs' "$REPO/install/top.sh"
   ! grep -q '_link_home_config' "$REPO/install/basic.sh"

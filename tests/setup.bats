@@ -35,6 +35,20 @@ menu_keys() {
 
 ALL="top dev ai network environment basic surfing web pentest cloud cicd mitm wordlists wsl rdp"
 
+# Every section but ai: with all of them ticked, ai's tools come with dev.
+ALL_RUN="top dev network environment basic surfing web pentest cloud cicd mitm wordlists wsl rdp"
+
+# The last menu frame setup.sh drew.
+last_frame() {
+  awk '/^Arrows or j\/k move/ { buf = "" } { buf = buf $0 "\n" } /^== Section: / { exit } END { printf "%s", buf }' <<< "$output" |
+    sed '/^Section .*: nothing/,$d'
+}
+
+# The tool rows of the last frame: "<box> <name>", one per line.
+tool_rows() {
+  last_frame | grep -E '^    [> ] \[.\] ' | sed -E 's/^    . (\[.\]) ([^ ]+).*/\1 \2/'
+}
+
 # Section ids setup.sh announced, in order, one per line.
 sections_run() {
   grep -oE '^== Section: [a-z]+' <<< "$output" | sed 's/^== Section: //'
@@ -51,7 +65,8 @@ no_real_calls() {
 @test "all runs every section in install order" {
   setup_sh all --dry-run
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-  [ "$(sections_run | paste -sd' ')" = "$ALL" ]
+  [ "$(sections_run | paste -sd' ')" = "$ALL_RUN" ]
+  [[ "$output" == *"Section ai: its tools come with top dev"* ]] || { echo "$output"; return 1; }
   no_real_calls
   [ -z "$(find "$HOME" "$HAKPAK_OPT" "$HAKPAK_SYSROOT" -mindepth 1 -print -quit)" ]
 }
@@ -118,7 +133,7 @@ no_real_calls() {
 @test "all with other sections still runs every section once" {
   setup_sh --dry-run web all
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-  [ "$(sections_run | paste -sd' ')" = "$ALL" ]
+  [ "$(sections_run | paste -sd' ')" = "$ALL_RUN" ]
 }
 
 @test "no section arguments opens the menu with every section unticked" {
@@ -153,7 +168,7 @@ no_real_calls() {
 @test "menu: a ticks every section, a again unticks them" {
   menu_keys 'a\n' --dry-run
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-  [ "$(sections_run | paste -sd' ')" = "$ALL" ]
+  [ "$(sections_run | paste -sd' ')" = "$ALL_RUN" ]
   menu_keys 'aajjj \n' --dry-run
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [ "$(sections_run | paste -sd' ')" = "network" ]
@@ -205,28 +220,24 @@ no_real_calls() {
   done < <(grep -E '^(Arrows|[> ] \[|      )' <<< "$output")
 }
 
-@test "menu: a section line shows the section id once, without its title" {
+@test "menu: a section line shows the section id once, without its title, and how many tools are ticked" {
   menu_keys 'q' --dry-run
-  [[ "$output" == *"> [ ] top"$'\n'* ]] || { echo "$output"; return 1; }
-  [[ "$output" == *"  [ ] web"$'\n'* ]] || { echo "$output"; return 1; }
+  grep -qE '^> \[ \] top +0/8$' <<< "$output" || { echo "$output"; return 1; }
+  grep -qE '^  \[ \] web +0/12$' <<< "$output" || { echo "$output"; return 1; }
   [[ "$output" != *"Web Tools"* ]] || { echo "$output"; return 1; }
 }
 
-@test "menu: under each section it lists that section's tools from the manifest" {
-  menu_keys 'q' --dry-run
-  # The tools printed between one section line and the next.
-  section_tools() {
-    awk -v id="$1" '
-      /^[> ] \[.\] / { l = substr($0, 7); split(l, f, " "); on = (f[1] == id); next }
-      on && /^      / { for (i = 1; i <= NF; i++) print $i }
-      on && !/^      / { on = 0 }
-    ' <<< "$output"
-  }
+@test "menu: opening a section lists its tools from the manifest, one checkbox each" {
   source "$REPO/install/lib.sh"
+  local i=0 k keys s want got
   for s in $ALL; do
+    keys=""
+    for ((k = 0; k < i; k++)); do keys="${keys}j"; done
+    i=$((i + 1))
+    [ "$s" = wsl ] && continue  # config only, no tools
+    menu_keys "${keys}lq" --dry-run
     want="$(toolset_rows "$s" | cut -f3 | paste -sd' ')"
-    [ "$s" = wsl ] && want=/etc/wsl.conf  # config only, no tools
-    got="$(section_tools "$s" | paste -sd' ')"
+    got="$(tool_rows | awk '{ print $NF }' | paste -sd' ')"
     [ "$got" = "$want" ] || { echo "$s: want '$want', got '$got'"; return 1; }
   done
 }
@@ -234,8 +245,8 @@ no_real_calls() {
 @test "menu: a tool added to the manifest shows up in the menu" {
   cp "$REPO/install/toolset.txt" "$BATS_TEST_TMPDIR/toolset.txt"
   echo "rdp  apt  zz-new-tool" >> "$BATS_TEST_TMPDIR/toolset.txt"
-  HAKPAK_TOOLSET="$BATS_TEST_TMPDIR/toolset.txt" menu_keys 'q' --dry-run
-  [[ "$output" == *"zz-new-tool"* ]] || { echo "$output"; return 1; }
+  HAKPAK_TOOLSET="$BATS_TEST_TMPDIR/toolset.txt" menu_keys 'jjjjjjjjjjjjjjjjjjjjlq' --dry-run
+  tool_rows | grep -qx '\[ \] zz-new-tool' || { echo "$output"; return 1; }
 }
 
 @test "menu: redraws move up over the whole frame, tool lines included" {
@@ -249,27 +260,48 @@ no_real_calls() {
 }
 
 @test "menu: tool lines wrap to a terminal narrower than 80 columns" {
-  COLUMNS=50 menu_keys 'q' --dry-run
+  COLUMNS=50 menu_keys 'jjjjjjjq' --dry-run
   local line
   while IFS= read -r line; do
     [ "${#line}" -lt 50 ] || { echo "too wide (${#line}): $line"; return 1; }
   done < <(grep -E '^      ' <<< "$output")
   [[ "$output" == *"gowitness"* ]]
+  # tool rows with their notes are cut to the width too
+  COLUMNS=50 menu_keys 'jlq' --dry-run
+  while IFS= read -r line; do
+    [ "${#line}" -lt 50 ] || { echo "too wide (${#line}): $line"; return 1; }
+  done < <(grep -E '^    [> ] \[' <<< "$output")
+  [[ "$output" == *"claude-code-config"* ]]
+  # and so is the key help at the top
+  COLUMNS=50 menu_keys 'q' --dry-run
+  while IFS= read -r line; do
+    [ "${#line}" -lt 50 ] || { echo "too wide (${#line}): $line"; return 1; }
+  done < <(grep -E '^Arrows' <<< "$output")
 }
 
-@test "menu: on a short terminal only the section under the cursor lists its tools" {
-  LINES=21 menu_keys 'jq' --dry-run
+@test "menu: the key help fits 72 columns uncut" {
+  COLUMNS=72 menu_keys 'q' --dry-run
+  [[ "$output" == *"Enter installs, q quit"$'\n'* ]] || { echo "$output"; return 1; }
+}
+
+@test "menu: a section you didn't touch says nothing about tools it shares" {
+  menu_keys ' \n' --dry-run
+  [[ "$output" != *"come with"* ]] || { echo "$output"; return 1; }
+}
+
+@test "menu: only the section under the cursor lists its tools" {
+  menu_keys 'jq' --dry-run
   first="$(sed -n '/^Arrows or j\/k move/,/^Arrows or j\/k move/p' <<< "$output")"
   [[ "$first" == *"claude-code"* ]] || { echo "$first"; return 1; }
   [[ "$first" != *"build-essential"* ]] || { echo "$first"; return 1; }
-  second="$(sed -n '1,/^Arrows or j\/k move/!p' <<< "$output" | sed -n '/^Arrows or j\/k move/,$p')"
+  second="$(last_frame)"
   [[ "$second" == *"build-essential"* ]] || { echo "$second"; return 1; }
-  [[ "$second" != *"claude-code"* ]] || { echo "$second"; return 1; }
+  [[ "$second" != *"oh-my-zsh"* ]] || { echo "$second"; return 1; }
 }
 
 @test "menu: on a short terminal a tool list longer than the room left is cut" {
   LINES=21 menu_keys 'jq' --dry-run
-  second="$(sed -n '1,/^Arrows or j\/k move/!p' <<< "$output" | sed -n '/^Arrows or j\/k move/,$p')"
+  second="$(last_frame)"
   [ "$(grep -c '^      ' <<< "$second")" -eq 2 ] || { echo "$second"; return 1; }
   grep -qx '      \.\.\.' <<< "$second"
   # with room for all of it, nothing is cut
@@ -278,17 +310,27 @@ no_real_calls() {
   [[ "$output" == *"claude-code-config"* ]]
 }
 
+@test "menu: on a short terminal an open section scrolls to keep the cursor in view" {
+  # 15 sections leave 24 - 15 - 4 = 5 rows for dev's 31 tools.
+  LINES=24 menu_keys "jl$(printf 'j%.0s' $(seq 1 25))q" --dry-run
+  frame="$(last_frame)"
+  [ "$(tool_rows | wc -l)" -eq 5 ] || { echo "$frame"; return 1; }
+  # the 26th tool of dev is under the cursor
+  grep -qE '^    > \[ \] git-cleanup' <<< "$frame" || { echo "$frame"; return 1; }
+  # the frame, and the "Nothing installed" after it
+  [ "$(wc -l <<< "$frame")" -le 24 ]
+}
+
 @test "menu: on a short terminal, a frame still fits and redraws over the last one" {
-  run bash -c 'printf "jj" | LINES=21 _HAKPAK_MENU_TTY=1 _HAKPAK_MENU_REDRAW=1 bash "$1" --dry-run' _ "$REPO/install/setup.sh"
+  run bash -c 'printf "jjl" | LINES=21 _HAKPAK_MENU_TTY=1 _HAKPAK_MENU_REDRAW=1 bash "$1" --dry-run' _ "$REPO/install/setup.sh"
   ups="$(grep -aoE $'\033\\[[0-9]+A' <<< "$output" | tr -dc '0-9\n')"
-  [ "$(wc -l <<< "$ups")" -eq 2 ] || { echo "redraws: $ups"; return 1; }
-  # frames, split at each redraw
+  [ "$(wc -l <<< "$ups")" -eq 3 ] || { echo "redraws: $ups"; return 1; }
   frames="$(sed -n '/^Arrows or j\/k move/,$p' <<< "$output" | sed $'s/\033\\[[0-9]*A\033\\[J/=REDRAW=\\\n/')"
-  f1="$(awk '/^=REDRAW=$/{exit} {n++} END{print n}' <<< "$frames")"
-  f2="$(awk '/^=REDRAW=$/{c++; next} c==1{n++} END{print n}' <<< "$frames")"
-  [ "$(sed -n 1p <<< "$ups")" -eq "$f1" ] || { echo "up $(sed -n 1p <<< "$ups") vs frame $f1"; return 1; }
-  [ "$(sed -n 2p <<< "$ups")" -eq "$f2" ] || { echo "up $(sed -n 2p <<< "$ups") vs frame $f2"; return 1; }
-  [ "$f1" -lt 21 ] && [ "$f2" -lt 21 ]
+  for k in 1 2 3; do
+    f="$(awk -v k="$k" '/^=REDRAW=$/{c++; next} c==k-1{n++} END{print n}' <<< "$frames")"
+    [ "$(sed -n "${k}p" <<< "$ups")" -eq "$f" ] || { echo "frame $k: up $(sed -n "${k}p" <<< "$ups") vs $f"; return 1; }
+    [ "$f" -lt 21 ] || { echo "frame $k is $f lines"; return 1; }
+  done
 }
 
 @test "menu: an unreadable manifest is reported once, not once per section" {
@@ -370,6 +412,110 @@ fake_wsl() {
 }
 
 @test "menu: the wsl section lists the file it installs, like the tool lists" {
-  menu_keys 'q' --dry-run
+  menu_keys 'jjjjjjjjjjjjjq' --dry-run
   grep -A1 -E '^. \[.\] wsl$' <<< "$output" | grep -qx '      /etc/wsl.conf' || { echo "$output"; return 1; }
+}
+
+
+# --- picking single tools ---
+
+@test "menu: ticking a section ticks every tool in it" {
+  menu_keys ' lq' --dry-run
+  grep -qE '^> \[x\] top +8/8$|^  \[x\] top +8/8$' <<< "$(last_frame)" || { last_frame; return 1; }
+  [ "$(tool_rows | cut -d' ' -f1 | sort -u)" = "[x]" ] || { tool_rows; return 1; }
+}
+
+@test "menu: l opens a section, space unticks one tool, and the section shows [~]" {
+  menu_keys ' l q' --dry-run
+  frame="$(last_frame)"
+  grep -qE '^  \[~\] top +7/8$' <<< "$frame" || { echo "$frame"; return 1; }
+  grep -qE '^    > \[ \] vim' <<< "$frame" || { echo "$frame"; return 1; }
+}
+
+@test "menu: only the ticked tools of a section are installed" {
+  menu_keys ' l \n' --dry-run
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [ "$(sections_run | paste -sd' ')" = "top" ]
+  [[ "$output" == *"Installing fzf zsh tmux"* ]] || { echo "$output"; return 1; }
+  [[ "$output" != *"Installing vim"* ]] || { echo "$output"; return 1; }
+}
+
+@test "menu: a tool shared by several sections is ticked in all of them" {
+  menu_keys ' jlq' --dry-run
+  frame="$(last_frame)"
+  grep -qE '^  \[~\] dev +1/31$|^> \[~\] dev +1/31$' <<< "$frame" || { echo "$frame"; return 1; }
+  grep -qE '^  \[~\] ai +1/11$' <<< "$frame" || { echo "$frame"; return 1; }
+  grep -qE '^  \[~\] basic +7/14$' <<< "$frame" || { echo "$frame"; return 1; }
+  [ "$(tool_rows | grep -c '^\[x\]')" -eq 1 ]
+  tool_rows | grep -qx '\[x\] claude-code'
+}
+
+@test "menu: unticking a shared tool in one section unticks it everywhere" {
+  # tick top, open dev, go down to claude-code (its 21st tool), untick it
+  menu_keys " jl$(printf 'j%.0s' $(seq 1 20)) q" --dry-run
+  frame="$(last_frame)"
+  grep -qE '^    > \[ \] claude-code ' <<< "$frame" || { echo "$frame"; return 1; }
+  grep -qE '^  \[~\] top +7/8$' <<< "$frame" || { echo "$frame"; return 1; }
+  grep -qE '^  \[ \] ai +0/11$' <<< "$frame" || { echo "$frame"; return 1; }
+}
+
+@test "menu: a shared tool is installed once, with the section that has the most of its tools ticked" {
+  menu_keys ' \n' --dry-run
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [ "$(sections_run | paste -sd' ')" = "top" ]
+  # tick top and all of ai: claude-code comes with top, the rest with ai
+  menu_keys ' jj \n' --dry-run
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [ "$(sections_run | paste -sd' ')" = "top ai" ]
+  [ "$(grep -cE 'Installing claude-code([^-a-z]|$)' <<< "$output")" -eq 1 ] || { echo "$output"; return 1; }
+}
+
+@test "menu: h closes the open section and goes back to its row" {
+  menu_keys ' ljhq' --dry-run
+  frame="$(last_frame)"
+  grep -qE '^> \[x\] top' <<< "$frame" || { echo "$frame"; return 1; }
+  [ -z "$(tool_rows)" ] || { echo "$frame"; return 1; }
+}
+
+@test "menu: space on a partly ticked section ticks all of it" {
+  menu_keys ' l h q' --dry-run
+  grep -qE '^> \[x\] top +8/8$' <<< "$(last_frame)" || { last_frame; return 1; }
+}
+
+@test "menu: past the last tool the cursor goes on to the next section and closes the open one" {
+  menu_keys "l$(printf 'j%.0s' $(seq 1 8))q" --dry-run
+  frame="$(last_frame)"
+  grep -qE '^> \[ \] dev' <<< "$frame" || { echo "$frame"; return 1; }
+  [ -z "$(tool_rows)" ] || { echo "$frame"; return 1; }
+}
+
+@test "menu: k from the first tool goes back to the section row, still open" {
+  menu_keys 'lkq' --dry-run
+  frame="$(last_frame)"
+  grep -qE '^> \[ \] top' <<< "$frame" || { echo "$frame"; return 1; }
+  [ "$(tool_rows | wc -l)" -eq 8 ] || { echo "$frame"; return 1; }
+}
+
+@test "menu: right and left arrows open and close a section" {
+  menu_keys '\033[Cq' --dry-run
+  [ "$(tool_rows | wc -l)" -eq 8 ] || { last_frame; return 1; }
+  menu_keys '\033[C\033[Dq' --dry-run
+  [ -z "$(tool_rows)" ] || { last_frame; return 1; }
+}
+
+@test "menu: a tool row shows the tool's note" {
+  menu_keys 'lq' --dry-run
+  grep -qE '^    [> ] \[ \] fzf +Ctrl\+R history search$' <<< "$(last_frame)" || { last_frame; return 1; }
+}
+
+@test "named sections install every tool of each, a shared tool once" {
+  setup_sh --dry-run dev ai
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [ "$(sections_run | paste -sd' ')" = "dev" ]
+  [[ "$output" == *"Section ai: its tools come with dev"* ]] || { echo "$output"; return 1; }
+  setup_sh --dry-run top ai
+  [ "$(sections_run | paste -sd' ')" = "top ai" ]
+  [ "$(grep -cE 'Installing claude-code([^-a-z]|$)' <<< "$output")" -eq 1 ] || { echo "$output"; return 1; }
+  setup_sh --dry-run ai
+  [ "$(sections_run | paste -sd' ')" = "ai" ]
 }

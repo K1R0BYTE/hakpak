@@ -317,17 +317,24 @@ _copy_config() {
 # The shell configs: .zshrc, .dircolors, .tmux.conf and the curated history.
 # The basic and top sections both install zsh and tmux, so both call this.
 # Your own files are backed up once, re-runs change nothing.
+# Only the configs of the tools this run installs (tool_wanted).
 link_shell_configs() {
-  step .zshrc link_config zsh/.zshrc "${HOME}/.zshrc"
-  step .dircolors link_config .dircolors "${HOME}/.dircolors"
-  # History is merged, not linked, so new commands stay out of the repo.
-  step .zsh_history merge_history zsh/.zsh_history "${HOME}/.zsh_history"
-  step .tmux.conf link_config tmux/.tmux.conf "${HOME}/.tmux.conf"
-  # Reload only if a tmux server is running.
-  if tmux info >/dev/null 2>&1; then
-    step 'tmux reload' tmux source-file "${HOME}/.tmux.conf"
+  if tool_wanted zsh; then
+    step .zshrc link_config zsh/.zshrc "${HOME}/.zshrc"
+    step .dircolors link_config .dircolors "${HOME}/.dircolors"
+    # History is merged, not linked, so new commands stay out of the repo.
+    step .zsh_history merge_history zsh/.zsh_history "${HOME}/.zsh_history"
   fi
-  step 'zsh from bash' start_zsh_from_bash
+  if tool_wanted tmux; then
+    step .tmux.conf link_config tmux/.tmux.conf "${HOME}/.tmux.conf"
+    # Reload only if a tmux server is running.
+    if tmux info >/dev/null 2>&1; then
+      step 'tmux reload' tmux source-file "${HOME}/.tmux.conf"
+    fi
+  fi
+  if tool_wanted zsh; then
+    step 'zsh from bash' start_zsh_from_bash
+  fi
   return 0
 }
 
@@ -404,7 +411,9 @@ _rewrite_with_marked_line() {
 # The shell part, system/.dev, needs no step: .zshrc sources every file in
 # system/.
 link_dev_configs() {
-  step 'git config' link_dev_git_config
+  if tool_wanted git-delta; then
+    step 'git config' link_dev_git_config
+  fi
   if is_sbx; then
     step 'sandbox environment' persist_dev_env_in_sbx
   fi
@@ -416,6 +425,7 @@ link_dev_configs() {
 # command in their repo, which the section cloned.
 claude_config_hint() {
   local dir="$HAKPAK_OPT/claude-code-config"
+  tool_wanted claude-code-config || return 0
   echo
   # Only when the clone is there (a dry run assumes it).
   if [ -d "$dir/.git" ] || [ "${HAKPAK_DRY_RUN:-0}" = "1" ]; then
@@ -426,9 +436,18 @@ claude_config_hint() {
   fi
 }
 
-# The dev section's closing hint: the Claude Code config, and the new PATH.
+# The dev section's closing hint: the Claude Code config, and the new PATH
+# when a tool that lives in ~/.cargo/bin, ~/.local/bin or fnm's Node is
+# installed.
 dev_hint() {
+  local t
   claude_config_hint
+  for t in fd uv python ast-grep ruff ty zizmor prek fnm node go actionlint rust; do
+    tool_wanted "$t" && break
+    t=""
+  done
+  [ -n "$t" ] || return 0
+  echo
   echo "Open a new shell (or log out and in) for the new PATH: the tools in ~/.cargo/bin, ~/.local/bin and fnm's Node."
 }
 
