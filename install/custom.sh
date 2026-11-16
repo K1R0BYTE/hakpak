@@ -325,7 +325,7 @@ _install_rust() {
   return $rc
 }
 
-# The Claude Code plugin marketplaces the dev plugins come from. A
+# The Claude Code plugin marketplaces the dev and ai plugins come from. A
 # marketplace is a catalogue: registering one installs nothing. hakpak's own
 # (.claude-plugin/marketplace.json in this repo) lists skills that are
 # published as a plain skill repo, so they install as plugins too; that

@@ -2,7 +2,7 @@
   "name": "hakpak",
   "owner": { "name": "hakpak" },
   "metadata": {
-    "description": "Skills published as a plain skill repo, listed as plugins so the hakpak dev section installs them with claude plugin install"
+    "description": "Skills published as a plain skill repo, listed as plugins so the hakpak dev and ai sections install them with claude plugin install"
   },
   "plugins": [
     {

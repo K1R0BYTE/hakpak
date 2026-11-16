@@ -210,7 +210,7 @@ section() {
 }
 
 @test "every section script runs cleanly in dry run" {
-  for s in dev.sh network.sh enviroment.sh basic.sh top.sh surfing.sh web-soft.sh pentest-soft.sh cloud.sh cicd.sh mitm.sh wordlists.sh rdp.sh wsl.sh; do
+  for s in dev.sh ai.sh network.sh enviroment.sh basic.sh top.sh surfing.sh web-soft.sh pentest-soft.sh cloud.sh cicd.sh mitm.sh wordlists.sh rdp.sh wsl.sh; do
     : > "$HAKPAK_DRY_RUN_LOG"
     section "$s"
     [ "$status" -eq 0 ] || { echo "$s failed: $output"; return 1; }

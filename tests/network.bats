@@ -19,7 +19,7 @@ lib() {
 @test "network comes right after dev, and there is no system section" {
   lib
   ids="$(for s in "${HAKPAK_SECTIONS[@]}"; do echo "${s%%:*}"; done | paste -sd' ')"
-  [[ "$ids " == "top dev network "* ]] || { echo "$ids"; return 1; }
+  [[ "$ids " == "top dev ai network "* ]] || { echo "$ids"; return 1; }
   [[ " $ids " != *" system "* ]] || { echo "$ids"; return 1; }
   run bash "$REPO/install/setup.sh" --help
   [[ "$output" == *"network "*"Network"* ]] || { echo "$output"; return 1; }
@@ -51,12 +51,12 @@ lib() {
   run bash "$REPO/install/setup.sh" system --dry-run
   [ "$status" -eq 2 ]
   [[ "$output" == *"unknown section: system"* ]] || { echo "$output"; return 1; }
-  [[ "$output" == *"valid sections: top dev network "* ]] || { echo "$output"; return 1; }
+  [[ "$output" == *"valid sections: top dev ai network "* ]] || { echo "$output"; return 1; }
   [ ! -s "$HAKPAK_DRY_RUN_LOG" ]
 }
 
 @test "the README names the network section, not system" {
-  grep -q '^Sections: `top`, `dev`, `network`, `environment`,' "$REPO/README.md"
+  grep -q '^Sections: `top`, `dev`, `ai`, `network`, `environment`,' "$REPO/README.md"
   grep -qx '## Network' "$REPO/README.md"
   ! grep -qx '## System' "$REPO/README.md"
 }

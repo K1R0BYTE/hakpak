@@ -2,7 +2,7 @@
 #
 #   section  kind  name  [source...]  # note shown in the README
 #
-# Sections: top dev network environment basic surfing web pentest cloud cicd mitm wordlists rdp
+# Sections: top dev ai network environment basic surfing web pentest cloud cicd mitm wordlists rdp
 # Kinds (see install/lib.sh): apt go pipx gem git venv url uv plugin custom
 #   uv: `uv tool install`; the source is the package, when its name differs
 #   plugin: a Claude Code plugin; the source is its marketplace
@@ -62,6 +62,22 @@ dev  plugin  static-analysis         trailofbits  # CodeQL, Semgrep and SARIF
 dev  plugin  differential-review     trailofbits  # security review of a diff
 dev  plugin  security-audit          hakpak       # Cloudflare's security-audit-skill
 dev  git     claude-code-config  https://github.com/trailofbits/claude-code-config  $HAKPAK_OPT/claude-code-config  # Trail of Bits' Claude Code config; run claude there and /trailofbits:config
+
+# --- AI ---
+# Claude Code with hakpak's skills, the plugin marketplaces and the skill
+# plugins, and Trail of Bits' Claude Code config. The same rows as in dev,
+# which keeps them, so either section sets up Claude Code on its own.
+ai  custom  claude-code  _install_claude_code    # Claude Code CLI from Anthropic's apt repo (stable), with the skills from .claude/skills
+ai  custom  claude-marketplaces  _install_claude_marketplaces  # trailofbits/skills, trailofbits/skills-curated, anthropics/skills and hakpak's own
+ai  plugin  modern-python           trailofbits  # uv, ruff, ty and pytest for Python projects
+ai  plugin  rust-review             trailofbits  # Rust security review
+ai  plugin  gh-cli                  trailofbits  # sends GitHub fetches through gh
+ai  plugin  git-cleanup             trailofbits  # sorts and cleans local branches and worktrees
+ai  plugin  property-based-testing  trailofbits
+ai  plugin  static-analysis         trailofbits  # CodeQL, Semgrep and SARIF
+ai  plugin  differential-review     trailofbits  # security review of a diff
+ai  plugin  security-audit          hakpak       # Cloudflare's security-audit-skill
+ai  git     claude-code-config  https://github.com/trailofbits/claude-code-config  $HAKPAK_OPT/claude-code-config  # Trail of Bits' Claude Code config; run claude there and /trailofbits:config
 
 # --- Network ---
 network  apt  net-tools
