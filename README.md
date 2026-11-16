@@ -34,7 +34,7 @@ bash setup.sh --dry-run all          # everything, without installing
 bash setup.sh --help                 # the section names
 ```
 
-Sections: `top`, `dev`, `network`, `environment`, `basic`, `surfing`, `web`, `pentest`, `cloud`, `cicd`, `mitm`, `wordlists`, `wsl`, `rdp`. If one fails, the rest still run and `setup.sh` lists the failed sections at the end.
+Sections: `top`, `dev`, `ai`, `network`, `environment`, `basic`, `surfing`, `web`, `pentest`, `cloud`, `cicd`, `mitm`, `wordlists`, `wsl`, `rdp`. If one fails, the rest still run and `setup.sh` lists the failed sections at the end.
 
 Run `setup.sh` as your normal user, not with sudo. Your user needs sudo rights; the scripts ask for your password only for the steps that need root (apt packages, `/usr/local`, `/etc`). Everything else installs as you: Go tools into `/opt/go`, pipx and uv tools into `~/.local/bin`, and git tools into `/opt/<tool>`, owned by you.
 
@@ -57,6 +57,8 @@ The `dev` section sets up a developer environment, based on the tools and config
 * Claude Code skills: it registers the plugin marketplaces `trailofbits/skills`, `trailofbits/skills-curated` and `anthropics/skills`, and installs the plugins listed under Dev below for your user. hakpak's own marketplace file (`.claude-plugin/marketplace.json`) lists Cloudflare's `security-audit-skill` as a plugin, so it installs the same way. `/plugin` in Claude Code shows the rest of each marketplace.
 * Configs: `system/.dev` puts the tool directories on PATH (the Rust and Node installed here ahead of the system's), turns on safer defaults for npm and pnpm (no install scripts, and no package younger than a day, which pnpm enforces and npm does from 11.10 on), and adds the aliases `sg` (ast-grep) and `claude-yolo` (`claude --dangerously-skip-permissions`). git gets delta as its pager through one `include` line in your `~/.gitconfig`, and a global ignore file if you have none; delete the include line to undo it.
 * Claude Code's `settings.json` is never written, and no permission mode is set for you. For a global `CLAUDE.md` and language rules, the section clones Trail of Bits' [claude-code-config](https://github.com/trailofbits/claude-code-config) to `/opt/claude-code-config`: run `claude` there, then `/trailofbits:config`.
+
+The `ai` section installs only the Claude Code part of `dev`: the Claude Code CLI with hakpak's skills, the plugin marketplaces, the skill plugins listed under AI below, and Trail of Bits' claude-code-config. It installs no toolchains and leaves your git and shell configs alone, and `dev` keeps the same rows, so either section sets up Claude Code on its own. In a Docker Sandbox it skips a read-only `~/.claude/skills` as `dev` does, and leaves `/etc/sandbox-persistent.sh` alone.
 
 In a Docker Sandbox (sbx) the section does three things differently. The PATH line also goes into `/etc/sandbox-persistent.sh`, which every shell there and Claude Code's own commands read. Skills come from plugins only, since `~/.claude/skills` is the host's shared skills store and is read-only by default. And when the network policy refused a download (an HTTP 403), the summary names the `sbx policy` commands to run on the host. A sandbox loses what `dev` installed when it is removed (`sbx rm`), not when it stops.
 
@@ -104,6 +106,20 @@ Every tool is one row in [`install/toolset.txt`](install/toolset.txt): its secti
 * go: latest Go from go.dev, in /usr/local/go
 * actionlint (go): GitHub Actions linter
 * rust: stable Rust with clippy and rustfmt, from rustup-init, checksum checked
+* claude-code: Claude Code CLI from Anthropic's apt repo (stable), with the skills from .claude/skills
+* claude-marketplaces: trailofbits/skills, trailofbits/skills-curated, anthropics/skills and hakpak's own
+* modern-python (plugin): uv, ruff, ty and pytest for Python projects
+* rust-review (plugin): Rust security review
+* gh-cli (plugin): sends GitHub fetches through gh
+* git-cleanup (plugin): sorts and cleans local branches and worktrees
+* property-based-testing (plugin)
+* static-analysis (plugin): CodeQL, Semgrep and SARIF
+* differential-review (plugin): security review of a diff
+* security-audit (plugin): Cloudflare's security-audit-skill
+* claude-code-config (git): Trail of Bits' Claude Code config; run claude there and /trailofbits:config
+
+## AI
+
 * claude-code: Claude Code CLI from Anthropic's apt repo (stable), with the skills from .claude/skills
 * claude-marketplaces: trailofbits/skills, trailofbits/skills-curated, anthropics/skills and hakpak's own
 * modern-python (plugin): uv, ruff, ty and pytest for Python projects

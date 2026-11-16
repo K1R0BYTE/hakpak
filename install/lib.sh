@@ -411,10 +411,10 @@ link_dev_configs() {
   return 0
 }
 
-# What the dev section leaves to you: the Claude Code config (CLAUDE.md and
-# language rules) is Trail of Bits' own, installed by a command in their
-# repo, which the section cloned.
-dev_hint() {
+# What the dev and ai sections leave to you: the Claude Code config
+# (CLAUDE.md and language rules) is Trail of Bits' own, installed by a
+# command in their repo, which the section cloned.
+claude_config_hint() {
   local dir="$HAKPAK_OPT/claude-code-config"
   echo
   # Only when the clone is there (a dry run assumes it).
@@ -424,6 +424,11 @@ dev_hint() {
       echo "This is a sandbox: leave its settings.json unticked there. It denies sudo, and ~/.claude/settings.json here already holds the sandbox's own key helper and permission mode."
     fi
   fi
+}
+
+# The dev section's closing hint: the Claude Code config, and the new PATH.
+dev_hint() {
+  claude_config_hint
   echo "Open a new shell (or log out and in) for the new PATH: the tools in ~/.cargo/bin, ~/.local/bin and fnm's Node."
 }
 

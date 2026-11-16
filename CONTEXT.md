@@ -4,7 +4,7 @@
 
 **Toolset manifest**: `install/toolset.txt`. Each row is `section kind name [source...]`, with an optional `# note` for the README. Section scripts install their rows with `install_section <id>`, and `tools/gen-readme` writes the README tool list from it.
 
-**Section**: one group of the Toolset, installed by one script in `install/`: Top, Dev, Network, Environment, Basic, Surfing, Web Tools, Pentest Tools, Cloud, CI/CD, MiTM, Wordlists, WSL config, RDP. The WSL config section (`wsl`) installs no tools, only `/etc/wsl.conf`; the menu ticks it on WSL, and it asks before replacing a different file.
+**Section**: one group of the Toolset, installed by one script in `install/`: Top, Dev, AI, Network, Environment, Basic, Surfing, Web Tools, Pentest Tools, Cloud, CI/CD, MiTM, Wordlists, WSL config, RDP. The WSL config section (`wsl`) installs no tools, only `/etc/wsl.conf`; the menu ticks it on WSL, and it asks before replacing a different file.
 
 **Setup**: `install/setup.sh [section...|all] [--dry-run]`. No sections opens the section menu (one checkbox per section with its tools from the manifest listed below it, or only under the cursor when the terminal is too short, read key by key; it needs a terminal, otherwise setup asks for section names); `all` installs every section; named sections install only those, always in install order. `--dry-run` turns on the Dry run. A failing section doesn't stop the next.
 
@@ -18,7 +18,9 @@
 
 **Skills**: the agent skills kept in `.claude/skills`, one directory with a `SKILL.md` each. The Top section links each into `~/.claude/skills` (`_link_claude_skills`) when it installs Claude Code; a skill of the same name you already have is kept.
 
-**Plugin marketplace**: a catalogue of Claude Code plugins. The Dev section registers three (`trailofbits/skills`, `trailofbits/skills-curated`, `anthropics/skills`) and hakpak's own, `.claude-plugin/marketplace.json`, which lists a skill published as a plain repo as a plugin. Plugins install into `~/.claude/plugins`, so they also work where `~/.claude/skills` is read-only.
+**AI section**: the Claude Code part of Dev on its own (`install/ai.sh`): Claude Code with the Skills, the plugin marketplaces and skill plugins, and Trail of Bits' claude-code-config. Dev keeps the same rows.
+
+**Plugin marketplace**: a catalogue of Claude Code plugins. The Dev and AI sections register three (`trailofbits/skills`, `trailofbits/skills-curated`, `anthropics/skills`) and hakpak's own, `.claude-plugin/marketplace.json`, which lists a skill published as a plain repo as a plugin. Plugins install into `~/.claude/plugins`, so they also work where `~/.claude/skills` is read-only.
 
 **Sandbox**: a Docker Sandbox (sbx), told by `$SANDBOX_NAME` and `/etc/sandbox-persistent.sh` (`is_sbx`). There the Dev section adds its environment (`system/.dev`) to that file, a read-only `~/.claude/skills` is skipped, and an install the network policy refused (HTTP 403) names the `sbx policy` commands for the host.
 

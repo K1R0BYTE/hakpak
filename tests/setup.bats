@@ -33,7 +33,7 @@ menu_keys() {
   run bash -c 'printf "$1" | _HAKPAK_MENU_TTY=1 bash "$2" "${@:3}"' _ "$keys" "$REPO/install/setup.sh" "$@"
 }
 
-ALL="top dev network environment basic surfing web pentest cloud cicd mitm wordlists wsl rdp"
+ALL="top dev ai network environment basic surfing web pentest cloud cicd mitm wordlists wsl rdp"
 
 # Section ids setup.sh announced, in order, one per line.
 sections_run() {
@@ -131,21 +131,21 @@ no_real_calls() {
 }
 
 @test "menu: space ticks, j/k move, Enter installs the ticked sections" {
-  # tick top, move down 6 to web, tick, up 2 to basic, tick, Enter
-  menu_keys ' jjjjjj kk \n' --dry-run
+  # tick top, move down 7 to web, tick, up 2 to basic, tick, Enter
+  menu_keys ' jjjjjjj kk \n' --dry-run
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [ "$(sections_run | paste -sd' ')" = "top basic web" ]
   [[ "$output" == *"[x] web"* ]]
 }
 
 @test "menu: arrow keys move the cursor" {
-  menu_keys '\033[B\033[B\033[B \033[A \n' --dry-run
+  menu_keys '\033[B\033[B\033[B\033[B \033[A \n' --dry-run
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [ "$(sections_run | paste -sd' ')" = "network environment" ]
 }
 
 @test "menu: space again unticks" {
-  menu_keys '  jj \n' --dry-run
+  menu_keys '  jjj \n' --dry-run
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [ "$(sections_run | paste -sd' ')" = "network" ]
 }
@@ -154,7 +154,7 @@ no_real_calls() {
   menu_keys 'a\n' --dry-run
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [ "$(sections_run | paste -sd' ')" = "$ALL" ]
-  menu_keys 'aajj \n' --dry-run
+  menu_keys 'aajjj \n' --dry-run
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [ "$(sections_run | paste -sd' ')" = "network" ]
 }
@@ -169,7 +169,7 @@ no_real_calls() {
 }
 
 @test "menu: Enter with nothing ticked asks again instead of installing" {
-  menu_keys '\njj \n' --dry-run
+  menu_keys '\njjj \n' --dry-run
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [[ "$output" == *"Tick at least one section"* ]]
   [ "$(sections_run | paste -sd' ')" = "network" ]
@@ -192,7 +192,7 @@ no_real_calls() {
 }
 
 @test "menu: SS3 arrow keys (application cursor mode) move the cursor too" {
-  menu_keys '\033OB\033OB\033OB \033OA \n' --dry-run
+  menu_keys '\033OB\033OB\033OB\033OB \033OA \n' --dry-run
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [ "$(sections_run | paste -sd' ')" = "network environment" ]
 }
@@ -258,7 +258,7 @@ no_real_calls() {
 }
 
 @test "menu: on a short terminal only the section under the cursor lists its tools" {
-  LINES=20 menu_keys 'jq' --dry-run
+  LINES=21 menu_keys 'jq' --dry-run
   first="$(sed -n '/^Arrows or j\/k move/,/^Arrows or j\/k move/p' <<< "$output")"
   [[ "$first" == *"claude-code"* ]] || { echo "$first"; return 1; }
   [[ "$first" != *"build-essential"* ]] || { echo "$first"; return 1; }
@@ -268,18 +268,18 @@ no_real_calls() {
 }
 
 @test "menu: on a short terminal a tool list longer than the room left is cut" {
-  LINES=20 menu_keys 'jq' --dry-run
+  LINES=21 menu_keys 'jq' --dry-run
   second="$(sed -n '1,/^Arrows or j\/k move/!p' <<< "$output" | sed -n '/^Arrows or j\/k move/,$p')"
   [ "$(grep -c '^      ' <<< "$second")" -eq 2 ] || { echo "$second"; return 1; }
   grep -qx '      \.\.\.' <<< "$second"
   # with room for all of it, nothing is cut
-  LINES=30 menu_keys 'jq' --dry-run
+  LINES=31 menu_keys 'jq' --dry-run
   [[ "$output" != *"      ..."* ]] || { echo "$output"; return 1; }
   [[ "$output" == *"claude-code-config"* ]]
 }
 
 @test "menu: on a short terminal, a frame still fits and redraws over the last one" {
-  run bash -c 'printf "jj" | LINES=20 _HAKPAK_MENU_TTY=1 _HAKPAK_MENU_REDRAW=1 bash "$1" --dry-run' _ "$REPO/install/setup.sh"
+  run bash -c 'printf "jj" | LINES=21 _HAKPAK_MENU_TTY=1 _HAKPAK_MENU_REDRAW=1 bash "$1" --dry-run' _ "$REPO/install/setup.sh"
   ups="$(grep -aoE $'\033\\[[0-9]+A' <<< "$output" | tr -dc '0-9\n')"
   [ "$(wc -l <<< "$ups")" -eq 2 ] || { echo "redraws: $ups"; return 1; }
   # frames, split at each redraw
@@ -288,7 +288,7 @@ no_real_calls() {
   f2="$(awk '/^=REDRAW=$/{c++; next} c==1{n++} END{print n}' <<< "$frames")"
   [ "$(sed -n 1p <<< "$ups")" -eq "$f1" ] || { echo "up $(sed -n 1p <<< "$ups") vs frame $f1"; return 1; }
   [ "$(sed -n 2p <<< "$ups")" -eq "$f2" ] || { echo "up $(sed -n 2p <<< "$ups") vs frame $f2"; return 1; }
-  [ "$f1" -lt 20 ] && [ "$f2" -lt 20 ]
+  [ "$f1" -lt 21 ] && [ "$f2" -lt 21 ]
 }
 
 @test "menu: an unreadable manifest is reported once, not once per section" {
