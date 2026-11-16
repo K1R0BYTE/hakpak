@@ -60,7 +60,7 @@ The `dev` section sets up a developer environment, based on the tools and config
 
 In a Docker Sandbox (sbx) the dev section does three things differently. The PATH line also goes into `/etc/sandbox-persistent.sh`, which every shell there and Claude Code's own commands read. Skills come from plugins only, since `~/.claude/skills` is the host's shared skills store and is read-only by default. And when the network policy refused a download (an HTTP 403), the summary names the `sbx policy` commands to run on the host. A sandbox loses what `dev` installed when it is removed (`sbx rm`), not when it stops.
 
-The `ai` section installs only the Claude Code part of `dev`: the Claude Code CLI with hakpak's skills, the plugin marketplaces, the skill plugins listed under AI below, and Trail of Bits' claude-code-config. It installs no toolchains and leaves your git and shell configs alone, and `dev` keeps the same rows, so either section sets up Claude Code on its own. In a Docker Sandbox it skips a read-only `~/.claude/skills` as `dev` does, and leaves `/etc/sandbox-persistent.sh` alone.
+The `ai` section installs only the Claude Code part of `dev`: the Claude Code CLI with hakpak's skills, the plugin marketplaces, the skill plugins listed under AI below, and Trail of Bits' claude-code-config. It installs no toolchains and leaves your git and shell configs alone, and `dev` keeps the same rows, so either section sets up Claude Code on its own. In a Docker Sandbox it skips a read-only `~/.claude/skills` and names the `sbx policy` commands after an HTTP 403, as `dev` does, and leaves `/etc/sandbox-persistent.sh` alone.
 
 To see what a section would do without changing anything:
 

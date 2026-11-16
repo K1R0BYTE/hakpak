@@ -81,6 +81,14 @@ AI_TOOLS="claude-code claude-marketplaces modern-python rust-review gh-cli git-c
   toolset_rows dev | cut -f3 | grep -qx ruff
 }
 
+@test "every Claude Code row of dev (claude-* and plugins) is in ai too" {
+  lib
+  ai="$(toolset_rows ai | cut -f2-5)"
+  while IFS= read -r row; do
+    grep -qxF -- "$row" <<< "$ai" || { echo "not in ai: $row"; return 1; }
+  done < <(toolset_rows dev | awk -F'\t' '$3 ~ /^claude-/ || $2 == "plugin"' | cut -f2-5)
+}
+
 @test "ai has none of dev's toolchains" {
   lib
   for t in build-essential ripgrep uv python fnm node go rust ruff; do

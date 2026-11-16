@@ -22,7 +22,7 @@
 
 **Plugin marketplace**: a catalogue of Claude Code plugins. The Dev and AI sections register three (`trailofbits/skills`, `trailofbits/skills-curated`, `anthropics/skills`) and hakpak's own, `.claude-plugin/marketplace.json`, which lists a skill published as a plain repo as a plugin. Plugins install into `~/.claude/plugins`, so they also work where `~/.claude/skills` is read-only.
 
-**Sandbox**: a Docker Sandbox (sbx), told by `$SANDBOX_NAME` and `/etc/sandbox-persistent.sh` (`is_sbx`). There the Dev section adds its environment (`system/.dev`) to that file, a read-only `~/.claude/skills` is skipped, and an install the network policy refused (HTTP 403) names the `sbx policy` commands for the host.
+**Sandbox**: a Docker Sandbox (sbx), told by `$SANDBOX_NAME` and `/etc/sandbox-persistent.sh` (`is_sbx`). There the Dev section adds its environment (`system/.dev`) to that file (AI doesn't), a read-only `~/.claude/skills` is skipped by both, and an install the network policy refused (HTTP 403) names the `sbx policy` commands for the host.
 
 **Theme**: a named look for the shell: a Starship prompt config `configs/starship/<name>.toml` and a tmux status bar `configs/tmux/themes/<name>.conf`. `tools/hakpak-theme <name>` picks one (`neon` by default); the choice is one word in `~/.config/hakpak/theme`, read by `.zshrc` and `.tmux.conf`, so the repo stays clean.
 
