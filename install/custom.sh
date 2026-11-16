@@ -116,25 +116,177 @@ _install_starship() {
 
 # --- Top ---
 
-# Claude Code from Anthropic's signed apt repo, stable channel (about a week
-# behind the latest release). A `claude` you already have, however it was
-# installed, is left as it is. The repo key must be Anthropic's release key:
-# its fingerprint is the one in the Claude Code setup docs
-# (https://code.claude.com/docs/en/setup). apt installs don't update
-# themselves: `sudo apt update && sudo apt upgrade claude-code`.
+# Claude Code, the native install (https://code.claude.com/docs/en/setup):
+# it updates itself in the background, on the latest channel. Package
+# manager installs (apt) never update themselves, and apt's stable channel
+# runs about a week behind the release that `claude` says is available.
+#
+# Which claude is there decides what happens:
+#   native (~/.local/bin/claude -> ~/.local/share/claude/versions/)  kept
+#   the apt package claude-code      native installed, then the package removed
+#   any other claude on PATH         kept (npm, Homebrew, your own launcher)
+#   none                             native installed
+# In a Docker Sandbox the claude sandbox already has the native install, so
+# it is kept; a shell sandbox gets one. On WSL, a claude found under /mnt
+# is Windows' own (through PATH interop) and doesn't count.
 # The skills are linked on every run, so a new skill in the repo shows up.
 _install_claude_code() {
-  if has_command claude; then
-    log_ok "claude-code already installed"
+  local path
+  if _claude_is_native; then
+    log_ok "claude-code already installed (native, updates itself)"
+  elif _claude_apt_installed; then
+    log "claude-code is the apt package, which doesn't update itself; moving it to the native install"
+    _install_claude_native || return 1
+  elif path="$(_claude_on_path)"; then
+    log_ok "claude-code already installed at ${path:-your PATH}; left as it is (claude doctor shows how it updates)"
   else
-    add_apt_repo claude-code \
-      https://downloads.claude.ai/keys/claude-code.asc \
-      /etc/apt/keyrings/claude-code.gpg \
-      'deb [signed-by=/etc/apt/keyrings/claude-code.gpg] https://downloads.claude.ai/claude-code/apt/stable stable main' \
-      31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE &&
-      apt_install claude-code || return 1
+    _install_claude_native || return 1
+    path="$(_claude_command)"
+    if [[ "$path" == /mnt/* ]] && is_wsl; then
+      echo "claude-code: Windows' claude ($path) comes first on your PATH. Put ~/.local/bin before it, or remove the Windows one, so claude runs the native install."
+    fi
+  fi
+  if _claude_apt_installed; then
+    _remove_claude_apt || return 1
   fi
   _link_claude_skills
+}
+
+CLAUDE_RELEASES=https://downloads.claude.ai/claude-code-releases
+
+_claude_command() {
+  command -v claude
+}
+
+# The claude on PATH that is an install of its own, printed; fails when
+# there is none. On WSL one under /mnt is Windows' and is not counted.
+_claude_on_path() {
+  local path
+  has_command claude || return 1
+  path="$(_claude_command)"
+  if [[ "$path" == /mnt/* ]] && is_wsl; then
+    return 1
+  fi
+  echo "$path"
+}
+
+# True when ~/.local/bin/claude is the native installer's launcher: a link
+# into ~/.local/share/claude/versions/.
+_claude_is_native() {
+  local target versions
+  [ -L "$HOME/.local/bin/claude" ] || return 1
+  target="$(readlink -f "$HOME/.local/bin/claude")" || return 1
+  versions="$(readlink -f "$HOME/.local/share/claude/versions")" || return 1
+  [[ "$target" == "$versions"/* ]] && [ -x "$target" ]
+}
+
+_claude_apt_installed() {
+  [ "$(dpkg-query -W -f='${Status}' claude-code 2>/dev/null)" = "install ok installed" ]
+}
+
+# The release platform name: linux-x64, linux-arm64, or -musl for Alpine.
+_claude_platform() {
+  local arch
+  case "$(uname -m)" in
+    x86_64|amd64) arch=x64 ;;
+    aarch64|arm64) arch=arm64 ;;
+    *) echo "Claude Code has no build for $(uname -m)" >&2; return 1 ;;
+  esac
+  if [ -e /lib/libc.musl-x86_64.so.1 ] || [ -e /lib/libc.musl-aarch64.so.1 ]; then
+    echo "linux-$arch-musl"
+  else
+    echo "linux-$arch"
+  fi
+}
+
+# The version in a downloaded `latest` file. It goes into URLs, so only a
+# plain version is taken (an HTML page from a portal or proxy is refused).
+_claude_release_version() {
+  local version
+  if [ "${HAKPAK_DRY_RUN:-0}" = "1" ]; then
+    echo "0.0.0"
+    return 0
+  fi
+  version="$(head -n 1 "$1" 2>/dev/null | tr -d '[:space:]')"
+  if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?$ ]]; then
+    echo "could not read the latest Claude Code version from $CLAUDE_RELEASES/latest" >&2
+    return 1
+  fi
+  echo "$version"
+}
+
+# Check a downloaded binary against a release manifest whose signature has
+# been checked: verify_claude_binary <binary> <manifest.json> <platform> <version>
+# The manifest must be that version's, and list that platform's sha256.
+verify_claude_binary() {
+  local bin="$1" manifest="$2" platform="$3" version="$4" json expected actual
+  json="$(tr -d '\n\r\t' < "$manifest")" || return 1
+  if ! [[ "$json" =~ \"version\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] ||
+      [ "${BASH_REMATCH[1]}" != "$version" ]; then
+    echo "the Claude Code manifest is not for version $version"
+    return 1
+  fi
+  if ! [[ "$json" =~ \"$platform\"[[:space:]]*:[[:space:]]*\{[^\}]*\"checksum\"[[:space:]]*:[[:space:]]*\"([0-9a-f]{64})\" ]]; then
+    echo "no checksum for $platform in the Claude Code manifest"
+    return 1
+  fi
+  expected="${BASH_REMATCH[1]}"
+  actual="$(sha256sum "$bin" | awk '{ print $1 }')" || return 1
+  if [ "$expected" != "$actual" ]; then
+    echo "checksum mismatch for the Claude Code $platform binary"
+    return 1
+  fi
+}
+
+# The checked binary sets itself up: the launcher in ~/.local/bin, the
+# version under ~/.local/share/claude, auto-updates on the latest channel.
+# No stdin, so it can't sit waiting for an answer.
+_claude_self_install() {
+  "$1" install latest < /dev/null
+}
+
+# The native installer script's own steps, with one more check
+# and no script piped into a shell: the release manifest's signature is
+# checked against Anthropic's Claude Code release key, kept in
+# install/keys/claude-code.asc (fingerprint
+# 31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE, as the setup docs give it),
+# then the binary against the manifest's sha256. Runs as you, no sudo.
+_install_claude_native() {
+  local platform version tmp rc
+  need_command curl || return 1
+  if ! has_command gpg || ! has_command gpgv; then
+    apt_install gnupg gpgv || return 1
+  fi
+  platform="$(_claude_platform)" || return 1
+  tmp="$(make_temp_dir)" || return 1
+  run_step curl -fsSL -o "$tmp/version" "$CLAUDE_RELEASES/latest" &&
+    version="$(_claude_release_version "$tmp/version")" &&
+    run_step curl -fsSL -o "$tmp/manifest.json" "$CLAUDE_RELEASES/$version/manifest.json" &&
+    run_step curl -fsSL -o "$tmp/manifest.json.sig" "$CLAUDE_RELEASES/$version/manifest.json.sig" &&
+    run_step verify_gpg_signature "$HAKPAK_ROOT/install/keys/claude-code.asc" "$tmp/manifest.json.sig" "$tmp/manifest.json" &&
+    run_step curl -fsSL -o "$tmp/claude" "$CLAUDE_RELEASES/$version/$platform/claude" &&
+    run_step verify_claude_binary "$tmp/claude" "$tmp/manifest.json" "$platform" "$version" &&
+    run_step chmod 755 "$tmp/claude" &&
+    run_step _claude_self_install "$tmp/claude"
+  rc=$?
+  run_step rm -rf "$tmp"
+  return "$rc"
+}
+
+# Remove the apt package once the native install is there, and the repo
+# list and keyring an older hakpak added for it, so apt stops reading a
+# repo nothing uses. A claude-code.list that isn't Claude Code's repo stays.
+_remove_claude_apt() {
+  local list="$HAKPAK_SYSROOT/etc/apt/sources.list.d/claude-code.list"
+  local key="$HAKPAK_SYSROOT/etc/apt/keyrings/claude-code.gpg"
+  run_step sudo env DEBIAN_FRONTEND=noninteractive apt-get remove -y claude-code || return 1
+  if [ -f "$list" ] && grep -q 'https://downloads.claude.ai/claude-code/apt/' "$list"; then
+    _run_at "$list" rm -f "$list" || return 1
+    if [ -f "$key" ]; then
+      _run_at "$key" rm -f "$key" || return 1
+    fi
+  fi
+  log_ok "claude-code: the apt package is removed; the native install updates itself"
 }
 
 _dir_is_writable() {

@@ -74,6 +74,39 @@ make_test_key() {
   FPR="$(gpg --batch --homedir "$home" --with-colons --list-keys | awk -F: '$1 == "fpr" { print $10; exit }')"
 }
 
+CLAUDE_RELEASES=https://downloads.claude.ai/claude-code-releases
+TMPDIR_DRY="${TMPDIR:-/tmp}/hakpak-dry-run"
+
+# A native install in the temp home: the launcher links into versions/.
+native_claude() {
+  mkdir -p "$HOME/.local/share/claude/versions" "$HOME/.local/bin"
+  printf '#!/bin/sh\n' > "$HOME/.local/share/claude/versions/2.1.300"
+  chmod +x "$HOME/.local/share/claude/versions/2.1.300"
+  ln -s "$HOME/.local/share/claude/versions/2.1.300" "$HOME/.local/bin/claude"
+}
+
+# dpkg says the claude-code package is installed.
+apt_claude() {
+  stub dpkg-query '[ "$4" = claude-code ] || [ "$3" = claude-code ] || exit 1; printf "install ok installed"'
+}
+
+wsl_sysroot() {
+  mkdir -p "$HAKPAK_SYSROOT/proc/sys/kernel"
+  echo "6.6.87.2-microsoft-standard-WSL2" > "$HAKPAK_SYSROOT/proc/sys/kernel/osrelease"
+}
+
+sbx_sysroot() {
+  mkdir -p "$HAKPAK_SYSROOT/etc"
+  : > "$HAKPAK_SYSROOT/etc/sandbox-persistent.sh"
+  export SANDBOX_NAME=box
+}
+
+# A release manifest in the shape Anthropic publishes: claude_manifest <version> <linux-x64 sha256>
+claude_manifest() {
+  printf '{\n  "version": "%s",\n  "buildDate": "2026-11-16T00:00:00Z",\n  "platforms": {\n    "darwin-arm64": { "checksum": "%s", "size": 1 },\n    "linux-x64": {\n      "checksum": "%s",\n      "size": 6\n    }\n  }\n}\n' \
+    "$1" "$(printf x | sha256sum | cut -d' ' -f1)" "$2" > "$BATS_TEST_TMPDIR/manifest.json"
+}
+
 CLAUDE_KEY_URL=https://downloads.claude.ai/keys/claude-code.asc
 CLAUDE_LINE='deb [signed-by=/etc/apt/keyrings/claude-code.gpg] https://downloads.claude.ai/claude-code/apt/stable stable main'
 CLAUDE_FPR=31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE
@@ -153,26 +186,39 @@ CLAUDE_FPR=31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE
 
 # --- Claude Code ---
 
-@test "claude-code installs from Anthropic's signed apt repo, stable channel" {
+@test "claude-code installs the native build, which updates itself, not the apt package" {
   lib_with_claude 0
   install_tool custom claude-code _install_claude_code
-  recorded "curl -fsSL -o"
-  recorded "$CLAUDE_KEY_URL"
-  recorded "$HAKPAK_SYSROOT/etc/apt/keyrings/claude-code.gpg"
-  recorded "$(printf '%q' "$CLAUDE_LINE")"
-  recorded "$HAKPAK_SYSROOT/etc/apt/sources.list.d/claude-code.list"
-  recorded "apt-get install -y claude-code"
+  recorded "curl -fsSL -o $TMPDIR_DRY/version $CLAUDE_RELEASES/latest"
+  recorded "$CLAUDE_RELEASES/0.0.0/manifest.json"
+  recorded "$CLAUDE_RELEASES/0.0.0/manifest.json.sig"
+  recorded "verify_gpg_signature $REPO/install/keys/claude-code.asc $TMPDIR_DRY/manifest.json.sig $TMPDIR_DRY/manifest.json"
+  recorded "$CLAUDE_RELEASES/0.0.0/linux-"
+  recorded "verify_claude_binary $TMPDIR_DRY/claude $TMPDIR_DRY/manifest.json linux-"
+  recorded "_claude_self_install $TMPDIR_DRY/claude"
+  not_recorded "apt-get install -y claude-code"
+  not_recorded "claude-code.list"
 }
 
-@test "claude-code checks the repo key against Anthropic's fingerprint before trusting it" {
+@test "claude-code checks the manifest's signature and the binary's checksum before running it" {
   lib_with_claude 0
   install_tool custom claude-code _install_claude_code
-  recorded "_key_has_fingerprint"
-  recorded "$CLAUDE_FPR"
-  # The check comes before the keyring is installed.
-  check="$(grep -n '_key_has_fingerprint' "$HAKPAK_DRY_RUN_LOG" | head -1 | cut -d: -f1)"
-  install="$(grep -n "install -m 644 .*claude-code.gpg" "$HAKPAK_DRY_RUN_LOG" | head -1 | cut -d: -f1)"
-  [ "$check" -lt "$install" ]
+  line() { grep -nF -- "$1" "$HAKPAK_DRY_RUN_LOG" | head -1 | cut -d: -f1; }
+  [ "$(line verify_gpg_signature)" -lt "$(line '/claude https://')" ] || { cat "$HAKPAK_DRY_RUN_LOG"; return 1; }
+  [ "$(line '/claude https://')" -lt "$(line verify_claude_binary)" ]
+  [ "$(line verify_claude_binary)" -lt "$(line _claude_self_install)" ]
+}
+
+@test "the native install runs as you: no sudo" {
+  lib_with_claude 0
+  install_tool custom claude-code _install_claude_code
+  not_recorded "sudo"
+}
+
+@test "the Claude Code key in the repo is Anthropic's release signing key" {
+  lib
+  run _key_has_fingerprint "$REPO/install/keys/claude-code.asc" "$CLAUDE_FPR"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
 }
 
 @test "claude-code is never installed by piping a script into a shell, or with npm" {
@@ -182,14 +228,193 @@ CLAUDE_FPR=31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE
   ! grep -n 'claude.ai/install.sh' "$REPO/install/custom.sh"
 }
 
-@test "claude-code already installed: no repo or package step, the skills are still linked" {
-  lib_with_claude 1
+@test "a native install that is already there is kept: no download, the skills are still linked" {
+  native_claude
+  lib
   run install_tool custom claude-code _install_claude_code
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-  [[ "$output" == *"already installed"* ]]
+  [[ "$output" == *"already installed"*"updates itself"* ]] || { echo "$output"; return 1; }
   not_recorded "apt-get"
   not_recorded "curl"
   recorded "ln -sfn $REPO/.claude/skills/sbx-cli $SKILLS/sbx-cli"
+}
+
+@test "another install of claude (npm, your own) is left as it is" {
+  lib_with_claude 1
+  _claude_command() { echo /usr/local/bin/claude; }
+  run install_tool custom claude-code _install_claude_code
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [[ "$output" == *"already installed"*"/usr/local/bin/claude"* ]] || { echo "$output"; return 1; }
+  not_recorded "curl"
+  not_recorded "apt-get"
+  recorded "ln -sfn $REPO/.claude/skills/sbx-cli $SKILLS/sbx-cli"
+}
+
+@test "an apt install moves to the native one: native first, then the package and hakpak's repo go" {
+  apt_claude
+  mkdir -p "$HAKPAK_SYSROOT/etc/apt/sources.list.d" "$HAKPAK_SYSROOT/etc/apt/keyrings"
+  echo "$CLAUDE_LINE" > "$HAKPAK_SYSROOT/etc/apt/sources.list.d/claude-code.list"
+  echo key > "$HAKPAK_SYSROOT/etc/apt/keyrings/claude-code.gpg"
+  lib_with_claude 1
+  _claude_command() { echo /usr/bin/claude; }
+  run install_tool custom claude-code _install_claude_code
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [[ "$output" == *"apt"*"native"* ]] || { echo "$output"; return 1; }
+  recorded "_claude_self_install"
+  recorded "apt-get remove -y claude-code"
+  recorded "rm -f $HAKPAK_SYSROOT/etc/apt/sources.list.d/claude-code.list"
+  recorded "rm -f $HAKPAK_SYSROOT/etc/apt/keyrings/claude-code.gpg"
+  line() { grep -nF -- "$1" "$HAKPAK_DRY_RUN_LOG" | head -1 | cut -d: -f1; }
+  [ "$(line _claude_self_install)" -lt "$(line 'apt-get remove')" ]
+}
+
+@test "an apt list that isn't Claude Code's own repo is not removed" {
+  apt_claude
+  mkdir -p "$HAKPAK_SYSROOT/etc/apt/sources.list.d"
+  echo 'deb https://example.test/apt stable main' > "$HAKPAK_SYSROOT/etc/apt/sources.list.d/claude-code.list"
+  lib_with_claude 1
+  _claude_command() { echo /usr/bin/claude; }
+  run install_tool custom claude-code _install_claude_code
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  recorded "apt-get remove -y claude-code"
+  not_recorded "sources.list.d/claude-code.list"
+}
+
+@test "an apt install is kept when the native install fails" {
+  unset HAKPAK_DRY_RUN
+  apt_claude
+  stub sudo 'echo "sudo $*" >> "'"$BATS_TEST_TMPDIR"'/sudo.log"'
+  stub curl 'exit 22'
+  lib_with_claude 1
+  _claude_command() { echo /usr/bin/claude; }
+  run install_tool custom claude-code _install_claude_code
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"failed: claude-code"* ]] || { echo "$output"; return 1; }
+  ! grep -q 'apt-get remove' "$BATS_TEST_TMPDIR/sudo.log" 2>/dev/null
+}
+
+@test "a native install with the apt package still there: the package goes, nothing is downloaded" {
+  native_claude
+  apt_claude
+  lib
+  run install_tool custom claude-code _install_claude_code
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  not_recorded "curl"
+  recorded "apt-get remove -y claude-code"
+}
+
+@test "WSL: a claude from Windows (under /mnt) doesn't count, the native one is installed" {
+  wsl_sysroot
+  lib_with_claude 1
+  _claude_command() { echo /mnt/c/Users/me/AppData/Roaming/npm/claude; }
+  run install_tool custom claude-code _install_claude_code
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  recorded "_claude_self_install"
+  [[ "$output" == *"Windows' claude"*"~/.local/bin before it"* ]] || { echo "$output"; return 1; }
+}
+
+@test "not on WSL, a claude under /mnt is an install of your own and is kept" {
+  lib_with_claude 1
+  _claude_command() { echo /mnt/tools/claude; }
+  run install_tool custom claude-code _install_claude_code
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  not_recorded "_claude_self_install"
+}
+
+@test "sandbox: the claude sandbox's own native install is kept as it is" {
+  sbx_sysroot
+  native_claude
+  lib
+  run install_tool custom claude-code _install_claude_code
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  not_recorded "curl"
+  not_recorded "apt-get"
+}
+
+@test "sandbox: a shell sandbox without claude gets the native install, without sudo" {
+  sbx_sysroot
+  lib_with_claude 0
+  run install_tool custom claude-code _install_claude_code
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  recorded "_claude_self_install"
+  not_recorded "sudo"
+}
+
+# --- the native install's checks ---
+
+@test "_claude_release_version takes a plain version and refuses anything else" {
+  unset HAKPAK_DRY_RUN
+  lib
+  printf '2.1.340\n' > "$BATS_TEST_TMPDIR/v"
+  run _claude_release_version "$BATS_TEST_TMPDIR/v"
+  [ "$status" -eq 0 ] && [ "$output" = 2.1.340 ]
+  printf '<html>blocked</html>\n' > "$BATS_TEST_TMPDIR/v"
+  run _claude_release_version "$BATS_TEST_TMPDIR/v"
+  [ "$status" -ne 0 ]
+  printf '2.1.340/../../x\n' > "$BATS_TEST_TMPDIR/v"
+  run _claude_release_version "$BATS_TEST_TMPDIR/v"
+  [ "$status" -ne 0 ]
+}
+
+@test "verify_claude_binary passes the binary the manifest lists for the platform" {
+  lib
+  printf 'binary' > "$BATS_TEST_TMPDIR/claude"
+  claude_manifest 2.1.340 "$(sha256sum "$BATS_TEST_TMPDIR/claude" | cut -d' ' -f1)"
+  run verify_claude_binary "$BATS_TEST_TMPDIR/claude" "$BATS_TEST_TMPDIR/manifest.json" linux-x64 2.1.340
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+}
+
+@test "verify_claude_binary fails another binary, another platform's, and another version's manifest" {
+  lib
+  printf 'binary' > "$BATS_TEST_TMPDIR/claude"
+  claude_manifest 2.1.340 "$(printf other | sha256sum | cut -d' ' -f1)"
+  run verify_claude_binary "$BATS_TEST_TMPDIR/claude" "$BATS_TEST_TMPDIR/manifest.json" linux-x64 2.1.340
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"checksum"* ]] || { echo "$output"; return 1; }
+  claude_manifest 2.1.340 "$(sha256sum "$BATS_TEST_TMPDIR/claude" | cut -d' ' -f1)"
+  run verify_claude_binary "$BATS_TEST_TMPDIR/claude" "$BATS_TEST_TMPDIR/manifest.json" linux-arm64-musl 2.1.340
+  [ "$status" -ne 0 ]
+  run verify_claude_binary "$BATS_TEST_TMPDIR/claude" "$BATS_TEST_TMPDIR/manifest.json" linux-x64 2.1.341
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"version"* ]] || { echo "$output"; return 1; }
+}
+
+@test "the native install runs a signed release's checked binary: claude install latest" {
+  unset HAKPAK_DRY_RUN
+  make_test_key
+  mkdir -p "$BATS_TEST_TMPDIR/root/install/keys" "$BATS_TEST_TMPDIR/serve"
+  cp "$KEY" "$BATS_TEST_TMPDIR/root/install/keys/claude-code.asc"
+  printf '#!/bin/sh\necho "$*" > "%s/ran"\n' "$BATS_TEST_TMPDIR" > "$BATS_TEST_TMPDIR/serve/claude"
+  platform="linux-x64"
+  case "$(uname -m)" in aarch64|arm64) platform="linux-arm64" ;; esac
+  printf '2.1.340\n' > "$BATS_TEST_TMPDIR/serve/latest"
+  printf '{"version":"2.1.340","platforms":{"%s":{"checksum":"%s","size":1}}}' "$platform" \
+    "$(sha256sum "$BATS_TEST_TMPDIR/serve/claude" | cut -d' ' -f1)" > "$BATS_TEST_TMPDIR/serve/manifest.json"
+  gpg --batch --homedir "$BATS_TEST_TMPDIR/gnupg-src" --detach-sign -o "$BATS_TEST_TMPDIR/serve/manifest.json.sig" "$BATS_TEST_TMPDIR/serve/manifest.json"
+  stub curl 'out=""; url=""; while [ $# -gt 0 ]; do case "$1" in -o) out="$2"; shift ;; -*) ;; *) url="$1" ;; esac; shift; done
+echo "$url" >> "'"$BATS_TEST_TMPDIR"'/urls"; cp "'"$BATS_TEST_TMPDIR"'/serve/${url##*/}" "$out"'
+  lib_with_claude 0
+  HAKPAK_ROOT="$BATS_TEST_TMPDIR/root"
+  run _install_claude_native
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [ "$(cat "$BATS_TEST_TMPDIR/ran")" = "install latest" ]
+  grep -qx "$CLAUDE_RELEASES/2.1.340/$platform/claude" "$BATS_TEST_TMPDIR/urls"
+}
+
+@test "the native install refuses a manifest that Anthropic's key didn't sign" {
+  unset HAKPAK_DRY_RUN
+  make_test_key
+  printf '2.1.340\n' > "$BATS_TEST_TMPDIR/served-version"
+  printf '{"version":"2.1.340","platforms":{}}' > "$BATS_TEST_TMPDIR/served-manifest"
+  gpg --batch --homedir "$BATS_TEST_TMPDIR/gnupg-src" --detach-sign -o "$BATS_TEST_TMPDIR/served-sig" "$BATS_TEST_TMPDIR/served-manifest"
+  stub curl 'out=""; url=""; while [ $# -gt 0 ]; do case "$1" in -o) out="$2"; shift ;; -*) ;; *) url="$1" ;; esac; shift; done
+case "$url" in */latest) cp "'"$BATS_TEST_TMPDIR"'/served-version" "$out" ;; *.sig) cp "'"$BATS_TEST_TMPDIR"'/served-sig" "$out" ;; *manifest.json) cp "'"$BATS_TEST_TMPDIR"'/served-manifest" "$out" ;; *) echo "fetched $url" >> "'"$BATS_TEST_TMPDIR"'/fetched.log"; : > "$out" ;; esac'
+  lib_with_claude 0
+  run install_tool custom claude-code _install_claude_code
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"failed: claude-code"* ]] || { echo "$output"; return 1; }
+  [[ "$output" == *"gpgv"* || "$output" == *"signature"* ]] || { echo "$output"; return 1; }
+  [ ! -e "$BATS_TEST_TMPDIR/fetched.log" ] || { cat "$BATS_TEST_TMPDIR/fetched.log"; return 1; }
 }
 
 @test "a failed Claude Code install is reported and links no skills" {

@@ -48,7 +48,7 @@ If a tool fails to install, the rest keep going and each section lists what fail
 
 Re-running a section is safe. Your own dotfiles (`.zshrc`, `.tmux.conf`, `.dircolors`) are moved to `<file>.bak` once and replaced with links into `configs/`, so later runs change nothing. Configs under `/etc` (like `/etc/wsl.conf`) are copied, not linked, because root services read them. The curated `.zsh_history` is merged into your own history instead of linked, so Ctrl+R finds those commands and what you type stays local.
 
-The `top` section installs the [Claude Code](https://code.claude.com/docs/en/setup) CLI from Anthropic's signed apt repo, `stable` channel, after checking the repo key's fingerprint. If you already have `claude` (say, from the native installer), it is left as it is and only the skills are linked. Installed from apt it doesn't update itself: run `sudo apt update && sudo apt upgrade claude-code`. Start it with `claude` and sign in on first run.
+The `top` section installs the [Claude Code](https://code.claude.com/docs/en/setup) CLI the native way, which updates itself in the background on the `latest` channel. No script is piped into a shell: hakpak reads the latest version from `downloads.claude.ai`, checks the release manifest's signature against Anthropic's Claude Code release key in `install/keys/claude-code.asc` (fingerprint `31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE`), checks the binary's sha256 against the manifest, and runs its `claude install`, as you, without sudo. The launcher goes to `~/.local/bin/claude`. A native install you already have is kept. One from the `claude-code` apt package (what older hakpak versions installed, which never updates itself and runs about a week behind) moves to the native one: the native install goes in first, and then the package and its apt repo are removed. Any other `claude` (npm, Homebrew, your own) is left as it is, and only the skills are linked. In a Docker Sandbox the `claude` sandbox's own native install is kept, and a `shell` sandbox gets one. On WSL a Windows `claude` under `/mnt` doesn't count. Start it with `claude` and sign in on first run.
 
 The `dev` section sets up a developer environment, based on the tools and configs of the Trail of Bits [devcontainer](https://github.com/trailofbits/skills/tree/main/plugins/devcontainer-setup) without the container: nothing in it builds or runs one, so it fits a machine that is already a sandbox.
 
@@ -82,7 +82,7 @@ Every tool is one row in [`install/toolset.txt`](install/toolset.txt): its secti
 * starship: prompt for the hakpak themes, release binary, checksum checked
 * tmux (apt): with the hakpak config
 * tpm (git)
-* claude-code: Claude Code CLI from Anthropic's apt repo (stable), with the skills from .claude/skills
+* claude-code: Claude Code CLI, the native install that updates itself (an apt install moves to it), with the skills from .claude/skills
 
 ## Dev
 
@@ -106,7 +106,7 @@ Every tool is one row in [`install/toolset.txt`](install/toolset.txt): its secti
 * go: latest Go from go.dev, in /usr/local/go
 * actionlint (go): GitHub Actions linter
 * rust: stable Rust with clippy and rustfmt, from rustup-init, checksum checked
-* claude-code: Claude Code CLI from Anthropic's apt repo (stable), with the skills from .claude/skills
+* claude-code: Claude Code CLI, the native install that updates itself (an apt install moves to it), with the skills from .claude/skills
 * claude-marketplaces: trailofbits/skills, trailofbits/skills-curated, anthropics/skills and hakpak's own
 * modern-python (plugin): uv, ruff, ty and pytest for Python projects
 * rust-review (plugin): Rust security review
@@ -120,7 +120,7 @@ Every tool is one row in [`install/toolset.txt`](install/toolset.txt): its secti
 
 ## AI
 
-* claude-code: Claude Code CLI from Anthropic's apt repo (stable), with the skills from .claude/skills
+* claude-code: Claude Code CLI, the native install that updates itself (an apt install moves to it), with the skills from .claude/skills
 * claude-marketplaces: trailofbits/skills, trailofbits/skills-curated, anthropics/skills and hakpak's own
 * modern-python (plugin): uv, ruff, ty and pytest for Python projects
 * rust-review (plugin): Rust security review
