@@ -149,7 +149,8 @@ choose_sections() {
     flag[i]=0
     # Not tab-separated for read: it would merge an empty source field.
     while IFS=$'\x1f' read -r section _ name _ tnote; do
-      [ -n "$name" ] && [ "$section" = "${ids[i]}" ] || continue
+      [ -n "$name" ] || continue
+      [ "$section" = "${ids[i]}" ] || continue
       t_name+=("$name")
       t_note+=("$tnote")
       on[$name]=0
@@ -355,7 +356,8 @@ while IFS= read -r id; do
   _toolset_known "$id" "${chosen[@]}" || continue
   others=()
   while IFS=$'\t' read -r section _ name _; do
-    [ "$section" = "$id" ] && [ -n "${owner[$name]:-}" ] || continue
+    [ "$section" = "$id" ] || continue
+    [ -n "${owner[$name]:-}" ] || continue
     _toolset_known "${owner[$name]}" "${others[@]}" || others+=("${owner[$name]}")
   done <<< "$manifest_rows"
   if [ "${#others[@]}" -gt 0 ]; then

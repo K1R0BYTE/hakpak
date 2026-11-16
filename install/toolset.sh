@@ -199,7 +199,8 @@ toolset_plan() {
   # Owners: compare on/total as on_a * total_b > on_b * total_a.
   for id in "${ids[@]}"; do
     while IFS=$'\t' read -r section _ name _; do
-      [ "$section" = "$id" ] && [ -n "${ticked[$name]:-}" ] || continue
+      [ "$section" = "$id" ] || continue
+      [ -n "${ticked[$name]:-}" ] || continue
       owner="${owner_of[$name]:-}"
       if [ -z "$owner" ]; then
         owner_of[$name]="$id"
@@ -215,9 +216,11 @@ toolset_plan() {
   # needing it, if that section lists it.
   for _ in 1 2 3; do
     while IFS=$'\t' read -r section kind name _; do
-      [ -n "${ticked[$name]:-}" ] && [ "${owner_of[$name]}" = "$section" ] || continue
+      [ -n "${ticked[$name]:-}" ] || continue
+      [ "${owner_of[$name]}" = "$section" ] || continue
       for p in $(_toolset_needs "$kind" "$name"); do
-        [ -n "${owner_of[$p]:-}" ] && [ -n "${listed[$section/$p]:-}" ] || continue
+        [ -n "${owner_of[$p]:-}" ] || continue
+        [ -n "${listed[$section/$p]:-}" ] || continue
         [ "${pos[${owner_of[$p]}]}" -gt "${pos[$section]}" ] && owner_of[$p]="$section"
       done
     done <<< "$rows"
